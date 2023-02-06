@@ -1,0 +1,3 @@
+module SpecificationExtraction
+
+end # module
