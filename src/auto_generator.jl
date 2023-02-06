@@ -11,7 +11,7 @@ function exhaustive_auto_generator(grammar, max_depth, type)::Function
         Grammars.remove_rule!(g₁, idx)
     end
     @show g₁
-    Grammars.cleanup_deleted_rules!(g₁)
+    Grammars.cleanup_removed_rules!(g₁)
     @show g₁
 
     # Enumerate trees 

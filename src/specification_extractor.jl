@@ -49,7 +49,6 @@ function extract_specifications(
         end
         equivalence_classesᵢ = equivalence_classesᵢ₊₁
         equivalence_classesᵢ₊₁ = []
-        @show length(equivalence_classesᵢ)
     end
     return equivalence_classesᵢ
 end
