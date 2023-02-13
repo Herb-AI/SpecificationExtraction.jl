@@ -2,3 +2,6 @@ name = "SpecificationExtraction"
 uuid = "50dc28ac-0f47-49cd-a042-38ed5c54d180"
 authors = ["Jaap de Jong <jaapdejong15@gmail.com>"]
 version = "0.1.0"
+
+[compat]
+julia = "1.6"

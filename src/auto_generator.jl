@@ -10,9 +10,7 @@ function exhaustive_auto_generator(grammar, max_depth, type)::Function
     for idx ∈ variable_rules
         Grammars.remove_rule!(g₁, idx)
     end
-    @show g₁
     Grammars.cleanup_removed_rules!(g₁)
-    @show g₁
 
     # Enumerate trees 
     possible_values_set = Set()
