@@ -4,6 +4,7 @@ using ..Grammars
 using ..Search
 using ..Evaluation
 
+include("expr_util.jl")
 include("specification_extractor.jl")
 include("auto_generator.jl")
 

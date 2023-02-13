@@ -15,15 +15,25 @@ function extract_specifications(
         num_batches_after_last_split::Int=5
         )
     # Identify the input variables in the grammar
+    variables_by_type = Dict()
+    type_by_variable = Dict()
     input_variables::Vector{NamedTuple{(:var, :type), Tuple{Symbol, Symbol}}} = []
     for (i, rule) ∈ enumerate(grammar.rules)
         if rule isa Symbol && rule ∉ grammar.types
             push!(input_variables, (var = rule, type = grammar.types[i]))
+            push!(get!(variables_by_type, grammar.types[i], []), rule)
+            type_by_variable[rule] = grammar.types[i]
         end
     end
-    
+
     # Enumerate a lot of programs
     programs = Set(map(x -> Grammars.rulenode2expr(x, grammar), Search.get_bfs_enumerator(grammar, max_depth, start_symbol)))
+
+    # Filter out programs that are identical to others by variable renaming 
+    # (enforce that variables must be ordered)
+    m = Dict([x => 0 for x ∈ keys(variables_by_type)])
+    filter!(x -> _check_variable_renaming(x, variables_by_type, type_by_variable, deepcopy(m))[1], programs)
+    @show programs
 
     equivalence_classesᵢ = [programs]
     equivalence_classesᵢ₊₁ = []
@@ -66,6 +76,7 @@ function extract_specifications(
     end
 end
 
+
 """
 Returns a tuple with three integers. 
 
@@ -87,6 +98,7 @@ function _expr_depth_size_vars(e::Expr)::Tuple{Int, Int, Int}
         sum(child_depth_size_vars[3]))
 end
 
+
 """
 Rewrites an equivalence class to a set of equalities.
 Returns the simplest expression in the equivalence class and the set of equalities.
@@ -105,63 +117,6 @@ function equivalence2specs(equivalence_class)
     return (simplest_expr, equivalences)
 end
 
-"""
-Replaces variables in an expression with the replacements provided in the dictionary.
-Returns a new expression.
-"""
-function _replace_variables(e::Expr, replacements::Dict)
-    return Expr(e.head, e.args[1], map(x -> _replace_variables(x, replacements), e.args[2:end])...)
-end
-_replace_variables(e::Symbol, replacements::Dict) = deepcopy(get(replacements, e, e))
-_replace_variables(e::Any, _) = deepcopy(e)
-
-
-"""
-Tries to match expression e₁ and e₂. 
-Expression e₂ can have it's variables filled in.
-Returns a dictionary with variable assignments if match is successful.
-Returns nothing if the match is unsuccessful.
-"""
-_match_expr(e₁::Symbol, e₂::Symbol) = Dict(e₂ => e₁)
-_match_expr(e₁, e₂::Symbol) = Dict(e₂ => e₁)
-_match_expr(::Symbol, _) = nothing
-_match_expr(e₁, e₂) = e₁ == e₂ ? Dict() : nothing
-
-function _match_expr(e₁::Expr, e₂::Expr)
-    if e₁.head ≠ e₂.head || e₁.args[1] ≠ e₂.args[1] || length(e₁.args) ≠ length(e₂.args)
-        return nothing
-    else
-        vars = Dict()
-        for varsᵢ ∈ map(ab -> _match_expr(ab[1], ab[2]), zip(e₁.args[2:end], e₂.args[2:end])) 
-            if varsᵢ ≡ nothing 
-                return nothing
-            end
-            # Check if another argument already assigned the same variables
-            for (k, v) ∈ varsᵢ
-                if k ∈ keys(vars) && v ≠ vars[k]
-                    return nothing
-                end
-                vars[k] = v
-            end
-        end
-        return vars
-    end
-end
-
-"""
-Tries to rewrite expression `e` by replacing (sub)expression `old` with `new`.
-Returns the rewritten expression.
-"""
-_rewrite(e::Symbol, old::Symbol, new::Any) = e == old ? new : deepcopy(e)
-_rewrite(e::Any, ::Any, ::Any) = deepcopy(e)
-
-function _rewrite(e::Expr, old::Expr, new::Any)
-    variables = _match_expr(e, old)
-    if variables ≠ nothing
-        return _replace_variables(new, variables)
-    end
-    return Expr(:call, e.args[1], map(a -> _rewrite(a, old, new), e.args[2:end])...)
-end
 
 """
 Converts equivalences to specifications and prunes them.
