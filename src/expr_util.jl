@@ -88,3 +88,25 @@ function _check_variable_renaming(expr::Expr, variables_by_type, type_by_variabl
 end
 
 _check_variable_renaming(::Any, _, _, maximum_index) = (true, maximum_index)
+
+
+"""
+Returns a tuple with three integers. 
+
+    1. The maximum depth of the expression.
+    2. The number of nodes in the expression.
+    3. The number of non-variable terminals in the expression.
+This tuple signifies the generality of expressions for specification generation and can be used for sorting.
+"""
+_expr_depth_size_vars(::Symbol)::Tuple{Int, Int, Int} = (0, 1, 0)
+_expr_depth_size_vars(::Any)::Tuple{Int, Int, Int} = (0, 1, 1)
+
+function _expr_depth_size_vars(e::Expr)::Tuple{Int, Int, Int}
+    if length(e.args) == 1
+        return (0, 1, 1)
+    end
+    child_depth_size_vars = collect(zip(collect(map(_expr_depth_size_vars, e.args[2:length(e.args)]))...))
+    return (maximum(child_depth_size_vars[1], init=0) + 1, 
+        sum(child_depth_size_vars[2]) + 1, 
+        sum(child_depth_size_vars[3]))
+end

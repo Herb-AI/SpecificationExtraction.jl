@@ -4,7 +4,6 @@ Generates all programs up to the maximum depth in the grammar,
 and divides them into equivalence classes.
 
 TODO: Optimize that programs without variables are only executed once
-TODO: Optimize for when there are multiple identical variables with different names
 """
 function extract_specifications(
         grammar::Grammars.ContextFreeGrammar, 
@@ -31,9 +30,9 @@ function extract_specifications(
 
     # Filter out programs that are identical to others by variable renaming 
     # (enforce that variables must be ordered)
+    # TODO: How can we filter this without removing associativity constraints?
     m = Dict([x => 0 for x ∈ keys(variables_by_type)])
-    filter!(x -> _check_variable_renaming(x, variables_by_type, type_by_variable, deepcopy(m))[1], programs)
-    @show programs
+    # filter!(x -> _check_variable_renaming(x, variables_by_type, type_by_variable, deepcopy(m))[1], programs)
 
     equivalence_classesᵢ = [programs]
     equivalence_classesᵢ₊₁ = []
@@ -78,31 +77,10 @@ end
 
 
 """
-Returns a tuple with three integers. 
-
-    1. The maximum depth of the expression.
-    2. The number of nodes in the expression.
-    3. The number of non-variable terminals in the expression.
-This tuple signifies the generality of expressions for specification generation and can be used for sorting.
-"""
-_expr_depth_size_vars(::Symbol)::Tuple{Int, Int, Int} = (0, 1, 0)
-_expr_depth_size_vars(::Any)::Tuple{Int, Int, Int} = (0, 1, 1)
-
-function _expr_depth_size_vars(e::Expr)::Tuple{Int, Int, Int}
-    if length(e.args) == 1
-        return (0, 1, 1)
-    end
-    child_depth_size_vars = collect(zip(collect(map(_expr_depth_size_vars, e.args[2:length(e.args)]))...))
-    return (maximum(child_depth_size_vars[1], init=0) + 1, 
-        sum(child_depth_size_vars[2]) + 1, 
-        sum(child_depth_size_vars[3]))
-end
-
-
-"""
 Rewrites an equivalence class to a set of equalities.
 Returns the simplest expression in the equivalence class and the set of equalities.
 The simplest expression is also used in every equality.
+The left-hand sides of the expressions are assumed to stay in the order of the equivalence class. 
 """
 function equivalence2specs(equivalence_class)
     # Find program with smallest size for the minimal depth.
@@ -130,71 +108,85 @@ function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
     # or equivalently, decreasing order of generality of the smallest element. 
     sort!(equivalence_classes, lt=(a, b) -> best_element(a) < best_element(b))
 
+    # Sort all equivalence classes
+    for i ∈ eachindex(equivalence_classes)
+        sort!(equivalence_classes[i], lt=(a, b) -> _expr_depth_size_vars(a) < _expr_depth_size_vars(b))
+    end
+
     for i ∈ eachindex(equivalence_classes)
         # Don't look at equivalence classes that have been emptied in earlier iterations.
         if length(equivalence_classes[i]) == 0
             continue
         end
-        (_, specs) = equivalence2specs(equivalence_classes[i])
-        sort!(specs, lt=(a, b) -> _expr_depth_size_vars(a[2]) < _expr_depth_size_vars(b[2]))
 
-        new_ec = Set(deepcopy(equivalence_classes[i]))
+        # Convert equivalence class to specifications and sort the specifications
+        (_, specs) = equivalence2specs(equivalence_classes[i])
+
+        # The specifications are sorted at this point, since the order of the equivalence class is maintained.
 
         # Prune current equivalence class
-        exprs_to_remove = Set()
-        for (old, new) ∈ specs
-            # Don't consider specifications that have been removed in earlier iterations
-            if old ∉ new_ec 
-                continue
-            end
-            # Test specification on all expressions still in the equivalence class
-            for expr ∈ new_ec
-                # Don't consider the expression that generated this specification.
+        new_ec = []
+        for expr ∈ equivalence_classes[i]
+            redundant = false
+            for (old, new) ∈ specs
+                # Don't consider the expressions that generated this specification.
                 if expr == old || expr == new
                     continue
                 end
                 rewritten_expr = _rewrite(expr, old, new)
                 # If a successful rewrite was done 
-                if rewritten_expr ≠ expr
-                    push!(exprs_to_remove, expr)
+                if rewritten_expr ∈ new_ec
+                    redundant = true
+                    break
                 end
             end
-            # Subtract exprs_to_remove from new_ec outside loop
-            setdiff!(new_ec, exprs_to_remove)
-            empty!(exprs_to_remove)
+            if !redundant
+                push!(new_ec, expr)
+            end
         end
 
         # Recompute new (pruned) equivalence class
         if length(new_ec) ≤ 1
+            # There are no specifications left
             equivalence_classes[i] = []
             continue
         end
         equivalence_classes[i] = collect(new_ec)
-        (_, specs) = equivalence2specs(equivalence_classes[i])
-        sort!(specs, lt=(a, b) -> _expr_depth_size_vars(a[2]) < _expr_depth_size_vars(b[2]))
 
-        # For each equivalence class we haven't seen before
-        for j ∈ i+1:length(equivalence_classes)
+        # Compute the specifications again from the pruned equivalence class
+        (_, specs) = equivalence2specs(equivalence_classes[i])
+
+        # The specifications are sorted at this point, since the order of the equivalence 
+        # class is maintained (also after pruning).
+
+        # For each other equivalence class:
+        for j ∈ Base.Iterators.flatten((1:i-1, i+1:length(equivalence_classes)))
             # Don't look at equivalence classes that have already been emptied
-            if length(equivalence_classes[j]) == 0
+            if length(equivalence_classes[j]) ≤ 1
                 continue
             end
-            new_ec = Set(deepcopy(equivalence_classes[j]))
 
-            for (old, new) ∈ specs
-                # Test specification on all expressions still in the equivalence class
-                for expr ∈ new_ec
+            # equivalence_classes[j] is still sorted.
+
+            new_ec = []
+            for expr ∈ equivalence_classes[j]
+                redundant = false
+                for (old, new) ∈ specs
                     rewritten_expr = _rewrite(expr, old, new)
-                    # If a successful rewrite was done, and the equivalent version hasn't been removed yet,
-                    # we remove the original (less general) expression.
-                    if rewritten_expr ≠ expr && rewritten_expr ∈ new_ec && rewritten_expr ∉ exprs_to_remove
-                        push!(exprs_to_remove, expr)
+                    # An expression is redundant if it can be rewritten to another expression 
+                    # that is already in the new equivalence class.
+                    if rewritten_expr ∈ new_ec
+                        redundant = true
+                        break
                     end
                 end
-                # Subtract exprs_to_remove from new_ec outside loop
-                setdiff!(new_ec, exprs_to_remove)
-                empty!(exprs_to_remove)
+                if !redundant
+                    push!(new_ec, expr)
+                end
             end
+
+            # If there is less than 2 expressions in the equivalence class, no equivalence can be generated,
+            # and the class can be discarded.
             if length(new_ec) ≤ 1
                 equivalence_classes[j] = []
             else
