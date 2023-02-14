@@ -89,6 +89,26 @@ end
 
 _check_variable_renaming(::Any, _, _, maximum_index) = (true, maximum_index)
 
+"""
+Given the order of variables in variables_by_type, e.g. [:a, :b, :c]
+this function returns false if a variable is used without any of the previous variables in the order being used.
+For example, `a + c` would be return false, since `c` is used while `b` is not used.
+It does not matter if the variable usage itself is unordered, e.g. `b + a` is still a valid program.
+"""
+function _check_variable_usage(x, type_by_variable, variables_by_type)::Bool
+    vars = _get_variables(x)
+    for var ∈ vars
+        type = type_by_variable[var]
+        for varᵢ ∈ variables_by_type[type][1:findfirst(isequal(var), variables_by_type[type])]
+            if varᵢ ∉ vars
+                return false
+            end
+        end
+    end
+    return true
+end
+
+
 
 """
 Returns a tuple with three integers. 

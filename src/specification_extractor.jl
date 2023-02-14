@@ -28,11 +28,10 @@ function extract_specifications(
     # Enumerate a lot of programs
     programs = Set(map(x -> Grammars.rulenode2expr(x, grammar), Search.get_bfs_enumerator(grammar, max_depth, start_symbol)))
 
-    # Filter out programs that are identical to others by variable renaming 
-    # (enforce that variables must be ordered)
-    # TODO: How can we filter this without removing associativity constraints?
-    m = Dict([x => 0 for x ∈ keys(variables_by_type)])
-    # filter!(x -> _check_variable_renaming(x, variables_by_type, type_by_variable, deepcopy(m))[1], programs)
+    # Only allow programs that when using a variable also use all variables of the same type 
+    # that are defined above it in the grammar.
+    # Prevents certain duplicates by variable renaming.
+    @time filter!(x -> _check_variable_usage(x, type_by_variable, variables_by_type), programs)
 
     equivalence_classesᵢ = [programs]
     equivalence_classesᵢ₊₁ = []
@@ -74,7 +73,6 @@ function extract_specifications(
         end
     end
 end
-
 
 """
 Rewrites an equivalence class to a set of equalities.
