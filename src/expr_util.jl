@@ -59,7 +59,7 @@ end
 Get all variables in the given expression
 """
 _get_variables(s::Symbol) = Set([s])
-_get_variables(e::Expr) = union(_get_variables.(e.args[2:end])...)
+_get_variables(e::Expr) = union(Set(), _get_variables.(e.args[2:end])...)
 _get_variables(::Any) = Set()
 
 

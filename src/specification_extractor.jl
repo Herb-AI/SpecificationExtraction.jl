@@ -16,7 +16,6 @@ function extract_specifications(
     )
 
     # Identify the input variables in the grammar
-    # TODO: store variables by rule number instead of symbol
     variables_by_type = Dict()
     type_by_variable = Dict()
     input_variables::Vector{NamedTuple{(:var, :type), Tuple{Symbol, Symbol}}} = []
