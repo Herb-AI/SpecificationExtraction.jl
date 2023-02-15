@@ -12,7 +12,8 @@ function extract_specifications(
         data_generators, 
         batch_size::Int=64,
         num_batches_after_last_split::Int=5
-        )
+    )
+
     # Identify the input variables in the grammar
     variables_by_type = Dict()
     type_by_variable = Dict()
@@ -31,16 +32,24 @@ function extract_specifications(
     # Only allow programs that when using a variable also use all variables of the same type 
     # that are defined above it in the grammar.
     # Prevents certain duplicates by variable renaming.
-    @time filter!(x -> _check_variable_usage(x, type_by_variable, variables_by_type), programs)
+    # TODO: Make this step more efficient, it takes up a lot of time
+    filter!(x -> _check_variable_usage(x, type_by_variable, variables_by_type), programs)
 
+    final_equivalence_classes = []
     equivalence_classesᵢ = [programs]
+    batches_since_last_splitᵢ = [0]
     equivalence_classesᵢ₊₁ = []
+    batches_since_last_splitᵢ₊₁ = []
     batches_since_last_split = 0
 
     symboltable::SymbolTable = SymbolTable(grammar)
 
-    while true
-        for equivalence_class ∈ equivalence_classesᵢ
+    while length(equivalence_classesᵢ) > 0
+        for (equivalence_class, batches_since_last_split) ∈ zip(equivalence_classesᵢ, batches_since_last_splitᵢ)
+            if batches_since_last_split ≥ num_batches_after_last_split
+                push!(final_equivalence_classes, equivalence_class)
+                continue
+            end
             tests = []
             # create tests
             for _ ∈ 1:batch_size
@@ -57,21 +66,22 @@ function extract_specifications(
                 outcomes = ntuple(i -> Evaluation.evaluate_with_input(symboltable, program, tests[i]), length(tests))
                 new_classes[outcomes] = push!(get(new_classes, outcomes, Any[]), program)
             end
-            append!(equivalence_classesᵢ₊₁, values(new_classes))
+            nc = values(new_classes)
+            
+            if length(values(new_classes)) == 1
+                append!(equivalence_classesᵢ₊₁, nc)
+                push!(batches_since_last_splitᵢ₊₁, batches_since_last_split + 1)
+            else
+                append!(equivalence_classesᵢ₊₁, nc)
+                append!(batches_since_last_splitᵢ₊₁, zeros(length(nc)))
+            end
         end
-        # TODO: Keep track of splits for batches individually
-        if length(equivalence_classesᵢ) == length(equivalence_classesᵢ₊₁)
-            batches_since_last_split += 1
-        else 
-            batches_since_last_split = 0
-        end
-
         equivalence_classesᵢ = equivalence_classesᵢ₊₁
         equivalence_classesᵢ₊₁ = []
-        if batches_since_last_split ≥ num_batches_after_last_split
-            return equivalence_classesᵢ
-        end
+        batches_since_last_splitᵢ = batches_since_last_splitᵢ₊₁
+        batches_since_last_splitᵢ₊₁ = []
     end
+    return final_equivalence_classes
 end
 
 """
@@ -104,14 +114,17 @@ function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
 
     # Sort equivalence classes in increasing order of complexity of the smallest element.
     # or equivalently, decreasing order of generality of the smallest element. 
+    println("Sorting classes")
     sort!(equivalence_classes, lt=(a, b) -> best_element(a) < best_element(b))
 
     # Sort all equivalence classes
-    for i ∈ eachindex(equivalence_classes)
+    println("Sorting...")
+    for i ∈ ProgressBar(eachindex(equivalence_classes))
         sort!(equivalence_classes[i], lt=(a, b) -> _expr_depth_size_vars(a) < _expr_depth_size_vars(b))
     end
 
-    for i ∈ eachindex(equivalence_classes)
+    println("Pruning...")
+    for i ∈ ProgressBar(eachindex(equivalence_classes))
         # Don't look at equivalence classes that have been emptied in earlier iterations.
         if length(equivalence_classes[i]) == 0
             continue

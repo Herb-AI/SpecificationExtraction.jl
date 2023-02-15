@@ -4,6 +4,7 @@ using ..Grammars
 using ..Search
 using ..Evaluation
 using Base.Iterators
+using ProgressBars
 
 include("expr_util.jl")
 include("specification_extractor.jl")
