@@ -1,31 +1,30 @@
 """
-Replaces variables in an expression with the replacements provided in the dictionary.
-Returns a new expression.
+Replaces variables in a rulenode with the replacements provided in the dictionary.
+Returns a new rulenode.
 """
-function _replace_variables(e::Expr, replacements::Dict)
-    return Expr(e.head, e.args[1], map(x -> _replace_variables(x, replacements), e.args[2:end])...)
+function _replace_variables(node::RuleNode, replacements::Dict)::RuleNode
+    if node.ind ∈ replacements.keys
+        return deepcopy(get(replacements, node.ind, node))
+    end
+    return RuleNode(node.ind, node._val, map(x -> _replace_variables(x, replacements), node.children))
 end
-_replace_variables(e::Symbol, replacements::Dict) = deepcopy(get(replacements, e, e))
-_replace_variables(e::Any, _) = deepcopy(e)
 
 
 """
-Tries to match expression e₁ and e₂. 
-Expression e₂ can have it's variables filled in.
+Tries to match rulenodes n₁ and n₂. 
+Node n₂ can have it's variables filled in.
 Returns a dictionary with variable assignments if match is successful.
+A variable is represented by the index of it's rulenode.
 Returns nothing if the match is unsuccessful.
 """
-_match_expr(e₁::Symbol, e₂::Symbol) = Dict(e₂ => e₁)
-_match_expr(e₁, e₂::Symbol) = Dict(e₂ => e₁)
-_match_expr(::Symbol, _) = nothing
-_match_expr(e₁, e₂) = e₁ == e₂ ? Dict() : nothing
-
-function _match_expr(e₁::Expr, e₂::Expr)
-    if e₁.head ≠ e₂.head || e₁.args[1] ≠ e₂.args[1] || length(e₁.args) ≠ length(e₂.args)
+function _match_expr(g::ContextFreeGrammar, n₁::RuleNode, n₂::RuleNode)::Union{Dict{Int, RuleNode}, Nothing}
+    if isvariable(g, n₂)
+        return Dict(n₂.ind => n₁)
+    elseif n₁.ind ≠ n₂.ind || length(n₁.children) ≠ length(n₂.children)
         return nothing
     else
         vars = Dict()
-        for varsᵢ ∈ map(ab -> _match_expr(ab[1], ab[2]), zip(e₁.args[2:end], e₂.args[2:end])) 
+        for varsᵢ ∈ map(ab -> _match_expr(g, ab[1], ab[2]), zip(n₁.children, n₂.children)) 
             if varsᵢ ≡ nothing 
                 return nothing
             end
@@ -42,18 +41,18 @@ function _match_expr(e₁::Expr, e₂::Expr)
 end
 
 """
-Tries to rewrite expression `e` by replacing (sub)expression `old` with `new`.
-Returns the rewritten expression.
+Tries to rewrite rulenode `n` by replacing (sub)expression `old` with `new`.
+Returns the rewritten rulenode.
 """
-_rewrite(e::Symbol, old::Symbol, new::Any) = e == old ? new : deepcopy(e)
-_rewrite(e::Any, ::Any, ::Any) = deepcopy(e)
-
-function _rewrite(e::Expr, old::Expr, new::Any)
-    variables = _match_expr(e, old)
+function _rewrite(g::ContextFreeGrammar, node::RuleNode, old::RuleNode, new::RuleNode)::RuleNode
+    if node == old
+        return new
+    end
+    variables = _match_expr(g, node, old)
     if variables ≠ nothing
         return _replace_variables(new, variables)
     end
-    return Expr(:call, e.args[1], map(a -> _rewrite(a, old, new), e.args[2:end])...)
+    return RuleNode(node.ind, node._val, map(x -> _rewrite(g, x, old, new), node.children))
 end
 
 """
@@ -113,20 +112,20 @@ end
 """
 Returns a tuple with three integers. 
 
-    1. The maximum depth of the expression.
-    2. The number of nodes in the expression.
-    3. The number of non-variable terminals in the expression.
-This tuple signifies the generality of expressions for specification generation and can be used for sorting.
+    1. The maximum depth of the rulenode.
+    2. The number of nodes in the rulenode.
+    3. The number of non-variable terminals in the rulenode.
+This tuple signifies the generality of rulenodes for specification generation and can be used for sorting.
 """
-_expr_depth_size_vars(::Symbol)::Tuple{Int, Int, Int} = (0, 1, 0)
-_expr_depth_size_vars(::Any)::Tuple{Int, Int, Int} = (0, 1, 1)
-
-function _expr_depth_size_vars(e::Expr)::Tuple{Int, Int, Int}
-    if length(e.args) == 1
+function _expr_depth_size_vars(node::RuleNode, g::Grammar)::Tuple{Int, Int, Int}
+    if isvariable(g, node)
+        return (0, 1, 0)
+    elseif isterminal(g, node)
         return (0, 1, 1)
     end
-    child_depth_size_vars = collect(zip(collect(map(_expr_depth_size_vars, e.args[2:length(e.args)]))...))
+    child_depth_size_vars = collect(zip(collect(map(x -> _expr_depth_size_vars(x, g), node.children))...))
     return (maximum(child_depth_size_vars[1], init=0) + 1, 
         sum(child_depth_size_vars[2]) + 1, 
-        sum(child_depth_size_vars[3]))
+        sum(child_depth_size_vars[3])
+    )
 end

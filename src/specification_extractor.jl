@@ -2,6 +2,7 @@
 """
 Generates all programs up to the maximum depth in the grammar,
 and divides them into equivalence classes.
+Returns vector of vectors with equivalent rulenodes.
 
 TODO: Optimize that programs without variables are only executed once
 """
@@ -15,6 +16,7 @@ function extract_specifications(
     )
 
     # Identify the input variables in the grammar
+    # TODO: store variables by rule number instead of symbol
     variables_by_type = Dict()
     type_by_variable = Dict()
     input_variables::Vector{NamedTuple{(:var, :type), Tuple{Symbol, Symbol}}} = []
@@ -26,14 +28,17 @@ function extract_specifications(
         end
     end
 
-    # Enumerate a lot of programs
-    programs = Set(map(x -> Grammars.rulenode2expr(x, grammar), Search.get_bfs_enumerator(grammar, max_depth, start_symbol)))
+    # Enumerate a lot of programs and precompute their expressions
+    programs::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}} = map(
+        x -> (rulenode = x, expr = Grammars.rulenode2expr(x, grammar)), 
+        Search.get_bfs_enumerator(grammar, max_depth, start_symbol)
+    )
 
     # Only allow programs that when using a variable also use all variables of the same type 
     # that are defined above it in the grammar.
     # Prevents certain duplicates by variable renaming.
     # TODO: Make this step more efficient, it takes up a lot of time
-    filter!(x -> _check_variable_usage(x, type_by_variable, variables_by_type), programs)
+    filter!(x -> _check_variable_usage(x.expr, type_by_variable, variables_by_type), programs)
 
     final_equivalence_classes = []
     equivalence_classesᵢ = [programs]
@@ -47,7 +52,7 @@ function extract_specifications(
     while length(equivalence_classesᵢ) > 0
         for (equivalence_class, batches_since_last_split) ∈ zip(equivalence_classesᵢ, batches_since_last_splitᵢ)
             if batches_since_last_split ≥ num_batches_after_last_split
-                push!(final_equivalence_classes, equivalence_class)
+                push!(final_equivalence_classes, map(x -> x.rulenode, equivalence_class))
                 continue
             end
             tests = []
@@ -63,7 +68,7 @@ function extract_specifications(
 
             # run tests
             for program ∈ equivalence_class
-                outcomes = ntuple(i -> Evaluation.evaluate_with_input(symboltable, program, tests[i]), length(tests))
+                outcomes = ntuple(i -> Evaluation.evaluate_with_input(symboltable, program.expr, tests[i]), length(tests))
                 new_classes[outcomes] = push!(get(new_classes, outcomes, Any[]), program)
             end
             nc = values(new_classes)
@@ -90,9 +95,9 @@ Returns the simplest expression in the equivalence class and the set of equaliti
 The simplest expression is also used in every equality.
 The left-hand sides of the expressions are assumed to stay in the order of the equivalence class. 
 """
-function equivalence2specs(equivalence_class)
+function equivalence2specs(grammar::ContextFreeGrammar, equivalence_class)
     # Find program with smallest size for the minimal depth.
-    simplest_expr = argmin(_expr_depth_size_vars, equivalence_class)
+    simplest_expr = argmin(x -> _expr_depth_size_vars(x, grammar), equivalence_class)
 
     equivalences::Vector{Tuple{Any, Any}} = []
     for expr ∈ equivalence_class
@@ -110,7 +115,7 @@ TODO: Automatically derive variable types from grammar
 """
 function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
     # Helper function for finding the best expression in an equivalence class
-    best_element(ec) = minimum(map(_expr_depth_size_vars, ec))
+    best_element(ec) = minimum(map(x -> _expr_depth_size_vars(x, grammar), ec))
 
     # Sort equivalence classes in increasing order of complexity of the smallest element.
     # or equivalently, decreasing order of generality of the smallest element. 
@@ -120,7 +125,7 @@ function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
     # Sort all equivalence classes
     println("Sorting...")
     for i ∈ ProgressBar(eachindex(equivalence_classes))
-        sort!(equivalence_classes[i], lt=(a, b) -> _expr_depth_size_vars(a) < _expr_depth_size_vars(b))
+        sort!(equivalence_classes[i], lt=(a, b) -> _expr_depth_size_vars(a, grammar) < _expr_depth_size_vars(b, grammar))
     end
 
     println("Pruning...")
@@ -131,28 +136,28 @@ function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
         end
 
         # Convert equivalence class to specifications and sort the specifications
-        (_, specs) = equivalence2specs(equivalence_classes[i])
+        (_, specs) = equivalence2specs(grammar, equivalence_classes[i])
 
         # The specifications are sorted at this point, since the order of the equivalence class is maintained.
 
         # Prune current equivalence class
         new_ec = []
-        for expr ∈ equivalence_classes[i]
+        for node ∈ equivalence_classes[i]
             redundant = false
             for (old, new) ∈ specs
                 # Don't consider the expressions that generated this specification.
-                if expr == old || expr == new
+                if node == old || node == new
                     continue
                 end
-                rewritten_expr = _rewrite(expr, old, new)
+                rewritten_node = _rewrite(grammar, node, old, new)
                 # If a successful rewrite was done 
-                if rewritten_expr ∈ new_ec
+                if rewritten_node ∈ new_ec
                     redundant = true
                     break
                 end
             end
             if !redundant
-                push!(new_ec, expr)
+                push!(new_ec, node)
             end
         end
 
@@ -165,7 +170,7 @@ function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
         equivalence_classes[i] = collect(new_ec)
 
         # Compute the specifications again from the pruned equivalence class
-        (_, specs) = equivalence2specs(equivalence_classes[i])
+        (_, specs) = equivalence2specs(grammar, equivalence_classes[i])
 
         # The specifications are sorted at this point, since the order of the equivalence 
         # class is maintained (also after pruning).
@@ -180,19 +185,19 @@ function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
             # equivalence_classes[j] is still sorted.
 
             new_ec = []
-            for expr ∈ equivalence_classes[j]
+            for node ∈ equivalence_classes[j]
                 redundant = false
                 for (old, new) ∈ specs
-                    rewritten_expr = _rewrite(expr, old, new)
+                    rewritten_node = _rewrite(grammar, node, old, new)
                     # An expression is redundant if it can be rewritten to another expression 
                     # that is already in the new equivalence class.
-                    if rewritten_expr ∈ new_ec
+                    if rewritten_node ∈ new_ec
                         redundant = true
                         break
                     end
                 end
                 if !redundant
-                    push!(new_ec, expr)
+                    push!(new_ec, node)
                 end
             end
 
@@ -205,5 +210,5 @@ function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
             end
         end
     end
-    return collect(equivalence2specs.(filter(x -> x ≠ [], equivalence_classes)))
+    return map(x -> equivalence2specs(grammar, x), filter(x -> x ≠ [], equivalence_classes))
 end
