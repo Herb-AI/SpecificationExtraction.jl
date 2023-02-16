@@ -12,9 +12,9 @@ end
 
 """
 Tries to match rulenodes n₁ and n₂. 
-Node n₂ can have it's variables filled in.
+Node n₂ can have its variables filled in.
 Returns a dictionary with variable assignments if match is successful.
-A variable is represented by the index of it's rulenode.
+A variable is represented by the index of its rulenode.
 Returns nothing if the match is unsuccessful.
 """
 function _match_expr(g::ContextFreeGrammar, n₁::RuleNode, n₂::RuleNode)::Union{Dict{Int, RuleNode}, Nothing}
