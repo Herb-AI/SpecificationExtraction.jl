@@ -8,9 +8,10 @@ TODO: Optimize that programs without variables are only executed once
 """
 function extract_specifications(
         grammar::Grammars.ContextFreeGrammar, 
-        max_depth::Int, 
+        numprograms::Int,
         start_symbol::Symbol, 
         data_generators, 
+        max_depth::Int=typemax(Int),
         batch_size::Int=64,
         num_batches_after_last_split::Int=5
     )
@@ -20,24 +21,31 @@ function extract_specifications(
     type_by_variable = Dict()
     input_variables::Vector{NamedTuple{(:var, :type), Tuple{Symbol, Symbol}}} = []
     for (i, rule) ∈ enumerate(grammar.rules)
-        if rule isa Symbol && rule ∉ grammar.types
+        if Grammars.isvariable(grammar, i)
             push!(input_variables, (var = rule, type = grammar.types[i]))
             push!(get!(variables_by_type, grammar.types[i], []), rule)
             type_by_variable[rule] = grammar.types[i]
         end
     end
 
-    # Enumerate a lot of programs and precompute their expressions
-    programs::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}} = map(
-        x -> (rulenode = x, expr = Grammars.rulenode2expr(x, grammar)), 
-        Search.get_bfs_enumerator(grammar, max_depth, start_symbol)
-    )
+    enumerator_constructor = (Grammars.isprobabilistic(grammar) ? 
+        Search.get_most_likely_first_enumerator :
+        Search.get_bfs_enumerator)
+    
+    enumerator = enumerator_constructor(grammar, max_depth, start_symbol)
 
+    # Enumerate a lot of programs and precompute their expressions
+    programs::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}} = []
+    println("Generating expressions")
+    for _ ∈ ProgressBar(1:numprograms)
+        x, enumerator = Iterators.peel(enumerator)
+        push!(programs, (rulenode = x, expr = Grammars.rulenode2expr(x, grammar)))
+    end
+    
     # Only allow programs that when using a variable also use all variables of the same type 
     # that are defined above it in the grammar.
     # Prevents certain duplicates by variable renaming.
-    # TODO: Make this step more efficient, it takes up a lot of time
-    filter!(x -> _check_variable_usage(x.expr, type_by_variable, variables_by_type), programs)
+    Iterators.filter!(x -> _check_variable_usage(x.expr, type_by_variable, variables_by_type), programs)
 
     final_equivalence_classes = []
     equivalence_classesᵢ = [programs]
@@ -113,8 +121,10 @@ Converts equivalences to specifications and prunes them.
 TODO: Automatically derive variable types from grammar
 """
 function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
+    priority_function = isprobabilistic(grammar) ? rulenode_probability : _expr_depth_size_vars
+
     # Helper function for finding the best expression in an equivalence class
-    best_element(ec) = minimum(map(x -> _expr_depth_size_vars(x, grammar), ec))
+    best_element(ec) = minimum(map(x -> priority_function(x, grammar), ec))
 
     # Sort equivalence classes in increasing order of complexity of the smallest element.
     # or equivalently, decreasing order of generality of the smallest element. 
@@ -124,7 +134,7 @@ function equivalences2specs(grammar::ContextFreeGrammar, equivalence_classes)
     # Sort all equivalence classes
     println("Sorting...")
     for i ∈ ProgressBar(eachindex(equivalence_classes))
-        sort!(equivalence_classes[i], lt=(a, b) -> _expr_depth_size_vars(a, grammar) < _expr_depth_size_vars(b, grammar))
+        sort!(equivalence_classes[i], lt=(a, b) -> priority_function(a, grammar) < priority_function(b, grammar))
     end
 
     println("Pruning...")
