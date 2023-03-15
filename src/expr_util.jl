@@ -17,7 +17,7 @@ Returns a dictionary with variable assignments if match is successful.
 A variable is represented by the index of its rulenode.
 Returns nothing if the match is unsuccessful.
 """
-function _match_expr(g::ContextFreeGrammar, n₁::RuleNode, n₂::RuleNode)::Union{Dict{Int, RuleNode}, Nothing}
+function _match_expr(g::Grammar, n₁::RuleNode, n₂::RuleNode)::Union{Dict{Int, RuleNode}, Nothing}
     if isvariable(g, n₂)
         return Dict(n₂.ind => n₁)
     elseif n₁.ind ≠ n₂.ind || length(n₁.children) ≠ length(n₂.children)
@@ -44,7 +44,7 @@ end
 Tries to rewrite rulenode `n` by replacing (sub)expression `old` with `new`.
 Returns the rewritten rulenode.
 """
-function _rewrite(g::ContextFreeGrammar, node::RuleNode, old::RuleNode, new::RuleNode)::RuleNode
+function _rewrite(g::Grammar, node::RuleNode, old::RuleNode, new::RuleNode)::RuleNode
     if node == old
         return new
     end

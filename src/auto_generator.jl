@@ -6,17 +6,19 @@ Doesn't account for data that might be introduced via the input variables.
 function exhaustive_auto_generator(grammar, max_depth, type)::Function
     # Remove any variable rules
     g₁ = deepcopy(grammar)
-    variable_rules = findall(x -> x isa Symbol && x ∉ grammar.types, g₁.rules)
+    variable_rules = findall(x -> isvariable(g₁, x), 1:length(g₁.rules))
     for idx ∈ variable_rules
-        Grammars.remove_rule!(g₁, idx)
+        remove_rule!(g₁, idx)
     end
-    Grammars.cleanup_removed_rules!(g₁)
+    cleanup_removed_rules!(g₁)
+
+    @show g₁.childtypes
 
     # Enumerate trees 
     possible_values_set = Set()
-    symboltable::SymbolTable = Grammars.SymbolTable(g₁)
-    for tree ∈ Search.get_dfs_enumerator(g₁, max_depth, type)
-        output = Evaluation.interpret(symboltable, Grammars.rulenode2expr(tree, g₁))
+    symboltable::SymbolTable = SymbolTable(g₁)
+    for tree ∈ get_dfs_enumerator(g₁, max_depth, type)
+        output = interpret(symboltable, rulenode2expr(tree, g₁))
         push!(possible_values_set, output)
     end
     # TODO: Look at different ways of randomizing the values
