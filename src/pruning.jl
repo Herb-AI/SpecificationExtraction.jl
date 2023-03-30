@@ -1,8 +1,7 @@
-
 """
 Converts equivalences to specifications and prunes them.
 """
-function equivalences2specs(grammar::Grammar, equivalence_classes)
+function equivalences2specs(grammar::Grammar, equivalence_classes, vars::Dict{Int, Symbol})
     priority_function = isprobabilistic(grammar) ? rulenode_probability : _expr_depth_size_vars
 
     # Helper function for finding the best expression in an equivalence class
@@ -19,6 +18,18 @@ function equivalences2specs(grammar::Grammar, equivalence_classes)
         sort!(equivalence_classes[i], lt=(a, b) -> priority_function(a, grammar) < priority_function(b, grammar))
     end
 
+    count = 0
+    for ec ∈ equivalence_classes
+        _, specs = equivalence2specs(grammar, ec)
+        for (old, new) ∈ specs
+            if containsrule(old, collect(keys(vars)))
+                count += 1
+                println("$(rulenode2expr(old, grammar)) → $(rulenode2expr(new, grammar))")
+            end
+        end
+    end
+    @show count
+
     println("Pruning...")
     for i ∈ ProgressBar(eachindex(equivalence_classes))
         # Don't look at equivalence classes that have been emptied in earlier iterations.
@@ -27,41 +38,48 @@ function equivalences2specs(grammar::Grammar, equivalence_classes)
         end
 
         # Convert equivalence class to specifications and sort the specifications
-        (_, specs) = equivalence2specs(grammar, equivalence_classes[i])
-
+        _, specs = equivalence2specs(grammar, equivalence_classes[i])
+        
+        
         # The specifications are sorted at this point, since the order of the equivalence class is maintained.
 
         # Prune current equivalence class
-        new_ec = []
-        for node ∈ equivalence_classes[i]
-            redundant = false
-            for (old, new) ∈ specs
+        for (old, new) ∈ specs
+            constraint = spec2constraint(old, new, vars)
+            if old ∉ equivalence_classes[i]
+                # We already removed this constraint in an earlier iteration, 
+                # so we don't need to check it.
+                continue
+            end
+            redundant_node_indices = []
+            for (node_ind, node) ∈ enumerate(equivalence_classes[i])
                 # Don't consider the expressions that generated this specification.
                 if node == old || node == new
                     continue
                 end
-                rewritten_node = _rewrite(grammar, node, old, new)
-                # If a successful rewrite was done 
-                if rewritten_node ∈ new_ec
-                    redundant = true
-                    break
+                if !check_tree(constraint, grammar, node)
+                    # The tree didn't abide the constraint and thus will not be generated 
+                    # if we would use the current constraint in the search.
+                    # This makes the constraint corresponding to this node redundant.
+                    push!(redundant_node_indices, node_ind)
                 end
             end
-            if !redundant
-                push!(new_ec, node)
+
+            # Remove redundant node indices in reverse, since otherwise indices shift.
+            for node_ind ∈ reverse!(redundant_node_indices)
+                deleteat!(equivalence_classes[i], node_ind)
             end
         end
 
         # Recompute new (pruned) equivalence class
-        if length(new_ec) ≤ 1
+        if length(equivalence_classes[i]) ≤ 1
             # There are no specifications left
             equivalence_classes[i] = []
             continue
         end
-        equivalence_classes[i] = collect(new_ec)
 
         # Compute the specifications again from the pruned equivalence class
-        (_, specs) = equivalence2specs(grammar, equivalence_classes[i])
+        _, specs = equivalence2specs(grammar, equivalence_classes[i])
 
         # The specifications are sorted at this point, since the order of the equivalence 
         # class is maintained (also after pruning).
@@ -74,30 +92,28 @@ function equivalences2specs(grammar::Grammar, equivalence_classes)
             end
 
             # equivalence_classes[j] is still sorted.
-
-            new_ec = []
-            for node ∈ equivalence_classes[j]
-                redundant = false
-                for (old, new) ∈ specs
-                    rewritten_node = _rewrite(grammar, node, old, new)
-                    # An expression is redundant if it can be rewritten to another expression 
-                    # that is already in the new equivalence class.
-                    if rewritten_node ∈ new_ec
-                        redundant = true
-                        break
+            for (old, new) ∈ specs
+                constraint = spec2constraint(old, new, vars)
+                redundant_node_indices = []
+                for (node_ind, node) ∈ enumerate(equivalence_classes[j])
+                    if !check_tree(constraint, grammar, node)
+                        # The tree didn't abide the constraint and thus will not be generated 
+                        # if we would use the current constraint in the search.
+                        # This makes the constraint corresponding to this node redundant.
+                        push!(redundant_node_indices, node_ind)
                     end
                 end
-                if !redundant
-                    push!(new_ec, node)
+    
+                # Remove redundant node indices in reverse, since otherwise indices shift.
+                for node_ind ∈ reverse!(redundant_node_indices)
+                    deleteat!(equivalence_classes[j], node_ind)
                 end
             end
 
             # If there is less than 2 expressions in the equivalence class, no equivalence can be generated,
             # and the class can be discarded.
-            if length(new_ec) ≤ 1
+            if length(equivalence_classes[j]) ≤ 1
                 equivalence_classes[j] = []
-            else
-                equivalence_classes[j] = new_ec
             end
         end
     end

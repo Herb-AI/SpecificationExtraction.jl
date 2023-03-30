@@ -70,7 +70,7 @@ function constraint_discovery(
         # Remove all equivalence classes with length < 2
         equivalence_classes = filter!(x -> length(x) ≥ 2, equivalence_classes) 
 
-        pruned_specs = equivalences2specs(g, equivalence_classes)
+        pruned_specs = equivalences2specs(g, equivalence_classes, Dict(var.index => var.var for var ∈ input_variables))
 
         # Obtain variables
         variables::Dict{Int, Symbol} = Dict()
@@ -89,3 +89,30 @@ function constraint_discovery(
     end
     return constraints
 end
+
+function _get_variables_from_rulenode(rn::RuleNode, variables::Dict{Int, Symbol}) 
+    if rn.ind ∈ keys(variables)
+        return Set([rn.ind])
+    else
+        return union!(Set(), _get_variables_from_rulenode(x, variables) for x ∈ rn.children)
+    end
+end
+
+function spec2constraint(lhs::RuleNode, rhs::RuleNode, variables::Dict{Int, Symbol})::PropagatorConstraint
+    # See if we can match the rhs of the expression using the left-hand side.
+    var_assignments = _match_expr(rhs, lhs, collect(keys(variables)))
+    if var_assignments ≡ nothing
+        # Create a ForbiddenTree constraint
+        return ForbiddenTree(rulenode2matchnode(lhs, variables))
+    else
+        # The rewrite was successful, so we know this should not be a ForbiddenTree constraint
+        constraint_variables = _get_variables_from_rulenode(lhs, variables)
+        # TODO: Get class of equalities that can all rewrite each other
+        # TODO: Generalize to larger lengths
+        if length(constraint_variables) == 2
+            return GlobalCommutativity(rulenode2matchnode(lhs, variables), [variables[k] for k ∈ sort!(collect(keys(variables)))])
+        end
+        return 
+    end
+end
+

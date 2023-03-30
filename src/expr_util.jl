@@ -17,14 +17,14 @@ Returns a dictionary with variable assignments if match is successful.
 A variable is represented by the index of its rulenode.
 Returns nothing if the match is unsuccessful.
 """
-function _match_expr(g::Grammar, n₁::RuleNode, n₂::RuleNode)::Union{Dict{Int, RuleNode}, Nothing}
-    if isvariable(g, n₂)
+function _match_expr(n₁::RuleNode, n₂::RuleNode, vars_ids::Vector{Int})::Union{Dict{Int, RuleNode}, Nothing}
+    if n₂.ind ∈ vars_ids
         return Dict(n₂.ind => n₁)
     elseif n₁.ind ≠ n₂.ind || length(n₁.children) ≠ length(n₂.children)
         return nothing
     else
         vars = Dict()
-        for varsᵢ ∈ map(ab -> _match_expr(g, ab[1], ab[2]), zip(n₁.children, n₂.children)) 
+        for varsᵢ ∈ map(ab -> _match_expr(ab[1], ab[2], vars_ids), zip(n₁.children, n₂.children)) 
             if varsᵢ ≡ nothing 
                 return nothing
             end
@@ -44,15 +44,15 @@ end
 Tries to rewrite rulenode `n` by replacing (sub)expression `old` with `new`.
 Returns the rewritten rulenode.
 """
-function _rewrite(g::Grammar, node::RuleNode, old::RuleNode, new::RuleNode)::RuleNode
+function _rewrite(node::RuleNode, old::RuleNode, new::RuleNode, var_ids::Vector{Int})::RuleNode
     if node == old
         return new
     end
-    variables = _match_expr(g, node, old)
+    variables = _match_expr(node, old, var_ids)
     if variables ≠ nothing
         return _replace_variables(new, variables)
     end
-    return RuleNode(node.ind, node._val, map(x -> _rewrite(g, x, old, new), node.children))
+    return RuleNode(node.ind, node._val, map(x -> _rewrite(x, old, new, var_ids), node.children))
 end
 
 """
