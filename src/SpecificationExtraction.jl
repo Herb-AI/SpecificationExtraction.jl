@@ -12,10 +12,12 @@ include("specification_extractor.jl")
 include("pruning.jl")
 include("auto_generator.jl")
 include("specification_procedure.jl")
+include("constraint_conversion.jl")
 
 export
     get_equivalences,
     exhaustive_auto_generator,
-    constraint_discovery
+    constraint_discovery,
+    spec2constraint
 
 end # module

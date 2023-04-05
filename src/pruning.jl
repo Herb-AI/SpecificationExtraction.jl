@@ -18,18 +18,6 @@ function equivalences2specs(grammar::Grammar, equivalence_classes, vars::Dict{In
         sort!(equivalence_classes[i], lt=(a, b) -> priority_function(a, grammar) < priority_function(b, grammar))
     end
 
-    count = 0
-    for ec ∈ equivalence_classes
-        _, specs = equivalence2specs(grammar, ec)
-        for (old, new) ∈ specs
-            if containsrule(old, collect(keys(vars)))
-                count += 1
-                println("$(rulenode2expr(old, grammar)) → $(rulenode2expr(new, grammar))")
-            end
-        end
-    end
-    @show count
-
     println("Pruning...")
     for i ∈ ProgressBar(eachindex(equivalence_classes))
         # Don't look at equivalence classes that have been emptied in earlier iterations.
@@ -90,7 +78,6 @@ function equivalences2specs(grammar::Grammar, equivalence_classes, vars::Dict{In
             if length(equivalence_classes[j]) ≤ 1
                 continue
             end
-
             # equivalence_classes[j] is still sorted.
             for (old, new) ∈ specs
                 constraint = spec2constraint(old, new, vars)
