@@ -91,19 +91,19 @@ end
 
 """
 Rewrites an equivalence class to a set of equalities.
-Returns the simplest expression in the equivalence class and the set of equalities.
-The simplest expression is also used in every equality.
-The left-hand sides of the expressions are assumed to stay in the order of the equivalence class. 
+Returns the simplest rulenode tree in the equivalence class and the set of equivalence specifications.
+The simplest tree is also used in every equality.
+The left-hand sides of the expressions stay in the order of the equivalence class. 
 """
-function equivalence2specs(grammar::Grammar, equivalence_class)
+function equivalence_class2specs(grammar::Grammar, equivalence_class)::Vector{EquivalenceSpecification}
     # Find program with smallest size for the minimal depth.
-    simplest_expr = argmin(x -> _expr_depth_size_vars(x, grammar), equivalence_class)
+    rhs = argmin(x -> _expr_depth_size_vars(x, grammar), equivalence_class)
 
-    equivalences::Vector{Tuple{Any, Any}} = []
-    for expr ∈ equivalence_class
-        if expr ≠ simplest_expr
-            push!(equivalences, (expr, simplest_expr))
+    equivalences = EquivalenceSpecification[]
+    for lhs ∈ equivalence_class
+        if lhs ≠ rhs
+            push!(equivalences, EquivalenceSpecification(lhs, rhs))
         end
     end
-    return (simplest_expr, equivalences)
+    return equivalences
 end

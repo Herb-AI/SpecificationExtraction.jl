@@ -80,22 +80,16 @@ function constraint_discovery(
             variables[v.index] = v.var
         end
 
-        for (_, specs) ∈ pruned_specs
-            for (old, new) ∈ specs
-                if containsrule(old, [v.index for v ∈ input_variables])
-                    println("$(rulenode2expr(old, g)) → $(rulenode2expr(new, g))")
-                    push!(constraints, spec2constraint(old, new, variables))
+        for specs ∈ pruned_specs
+            append!(constraints, specs2constraints(filter(x -> containsrule(x.lhs, [v.index for v ∈ input_variables]), specs), variables))
+
+            # TODO: Remove printing
+            for equivalence ∈ specs
+                if containsrule(equivalence.lhs, [v.index for v ∈ input_variables])
+                    println("$(rulenode2expr(equivalence.lhs, g)) → $(rulenode2expr(equivalence.rhs, g))")
                 end
             end
         end
     end
     return constraints
-end
-
-function _get_variables_from_rulenode(rn::RuleNode, variables::Dict{Int, Symbol}) 
-    if rn.ind ∈ keys(variables)
-        return Set([rn.ind])
-    else
-        return union!(Set(), _get_variables_from_rulenode(x, variables) for x ∈ rn.children)
-    end
 end

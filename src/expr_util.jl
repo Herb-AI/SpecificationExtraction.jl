@@ -129,3 +129,14 @@ function _expr_depth_size_vars(node::RuleNode, g::Grammar)::Tuple{Int, Int, Int}
         sum(child_depth_size_vars[3])
     )
 end
+
+"""
+Returns the set of variable indices that are used in the rulenode tree
+"""
+function _get_variables_from_rulenode(rn::RuleNode, variables::Dict{Int, Symbol}) 
+    if rn.ind ∈ keys(variables)
+        return Set([rn.ind])
+    else
+        return union!(Set(), _get_variables_from_rulenode(x, variables) for x ∈ rn.children)
+    end
+end

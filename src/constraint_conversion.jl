@@ -5,37 +5,85 @@ The `variables` dict has an entry for each variable with the key being the rulen
 index of the variable and as value the associated variable.
 This is necessary for converting RuleNodes to MatchVars.
 """
-function spec2constraint(lhs::RuleNode, rhs::RuleNode, variables::Dict{Int, Symbol})::PropagatorConstraint
-    # See if we can match the rhs of the expression using the left-hand side.
-    rewrite_function₁ = varname -> Symbol(string(varname) * "₁")
-    rewrite_function₂ = varname -> Symbol(string(varname) * "₂")
-    
-    # Create match nodes
-    mn₁ = rulenode2matchnode(lhs, variables)
-    mn₂ = rulenode2matchnode(rhs, variables)
+function specs2constraints(equivalences::Vector{EquivalenceSpecification}, variables::Dict{Int, Symbol})::Vector{PropagatorConstraint}
+    specs = deepcopy(equivalences)
+    constraints = PropagatorConstraint[]
 
-    # Create rewritten match nodes where variables are renamed to prevent identically-named variables in either side.
-    rmn₁ = copy_and_rewrite_variable_names(mn₁, rewrite_function₁)
-    rmn₂ = copy_and_rewrite_variable_names(mn₂, rewrite_function₂)
+    create_forbidden_tree_constraints!(specs, constraints, variables)
+    create_commutativity_constraints!(specs, constraints, variables)
 
-    # Create list of all new variables
-    rewritten_variables = append!([rewrite_function₁(v) for v ∈ values(variables)], [rewrite_function₂(v) for v ∈ values(variables)])
-    
-    # Detect if there exists a rulenode that matches both patterns
-    circular = detect_circularity(rmn₁, rmn₂, Dict{Symbol, MatchNode}(), Dict{Symbol, Set{Symbol}}(s => Set{Symbol}([s]) for s ∈ rewritten_variables))
-    if !circular
-        # Create a ForbiddenTree constraint
-        return ForbiddenTree(mn₁)
-    else
-        # The rewrite was successful, so we know this should not be a ForbiddenTree constraint
-        constraint_variables = _get_variables_from_rulenode(lhs, variables)
-        # TODO: Get class of equalities that can all rewrite each other
-        # TODO: Generalize to larger lengths
-        if length(constraint_variables) == 2
-            return GlobalCommutativity(rulenode2matchnode(lhs, variables), [variables[k] for k ∈ sort!(collect(keys(variables)))])
+    return constraints
+end
+
+function create_forbidden_tree_constraints!(
+    specifications::Vector{EquivalenceSpecification}, 
+    constraints::Vector{PropagatorConstraint}, 
+    variables::Dict{Int, Symbol}
+)::Nothing
+    deleted_specifications = Int[]
+    for (i, equivalence) ∈ enumerate(specifications)
+        # See if we can match the rhs of the expression using the left-hand side.
+        rewrite_function₁ = varname -> Symbol(string(varname) * "₁")
+        rewrite_function₂ = varname -> Symbol(string(varname) * "₂")
+
+        # Create match nodes
+        mn₁ = rulenode2matchnode(equivalence.lhs, variables)
+        mn₂ = rulenode2matchnode(equivalence.rhs, variables)
+
+        # Create rewritten match nodes where variables are renamed to prevent identically-named variables in either side.
+        rmn₁ = copy_and_rewrite_variable_names(mn₁, rewrite_function₁)
+        rmn₂ = copy_and_rewrite_variable_names(mn₂, rewrite_function₂)
+
+        # Create list of all new variables
+        rewritten_variables = append!([rewrite_function₁(v) for v ∈ values(variables)], [rewrite_function₂(v) for v ∈ values(variables)])
+
+        # Detect if there exists a rulenode that matches both patterns
+        circular = detect_circularity(rmn₁, rmn₂, Dict{Symbol, MatchNode}(), Dict{Symbol, Set{Symbol}}(s => Set{Symbol}([s]) for s ∈ rewritten_variables))
+        if !circular
+            push!(constraints, ForbiddenTree(mn₁))
+            push!(deleted_specifications, i)
         end
-        return 
     end
+
+    # Remove all specifications that have been converted to constraints.
+    for i ∈ reverse!(deleted_specifications)
+        deleteat!(specifications, i)
+    end
+end
+
+function create_commutativity_constraints!(
+    specifications::Vector{EquivalenceSpecification}, 
+    constraints::Vector{PropagatorConstraint},
+    variables::Dict{Int, Symbol}
+)::Nothing
+    # TODO: Check if lhs and rhs are equal apart from variable renaming
+    deleted_specifications = Int[]
+    for (i, equivalence) ∈ enumerate(specifications)
+        constraint_variables = _get_variables_from_rulenode(equivalence.lhs, variables)
+        if length(constraint_variables) == 2 # TODO: Generalize
+            c = GlobalCommutativity(rulenode2matchnode(equivalence.lhs, variables), [variables[k] for k ∈ sort!(collect(keys(variables)))])
+            push!(constraints, c)
+            push!(deleted_specifications, i)
+        end
+    end
+
+    # Remove all specifications that have been converted to constraints.
+    for i ∈ reverse!(deleted_specifications)
+        deleteat!(specifications, i)
+    end
+end
+
+
+function generalize_commutativity_constraints(constraints::Vector{GlobalCommutativity})   
+    orders = Dict{AbstractMatchNode, Set{Symbol}}
+    for c ∈ constraints
+        if c.tree ∉ keys(orders)
+            orders[c.tree] = Set(c.order)
+        else
+            union!(orders[c.tree], Set(c.order))
+        end
+    end
+    return orders
 end
 
 function copy_and_rewrite_variable_names(mn::MatchNode, rewrite::Function)

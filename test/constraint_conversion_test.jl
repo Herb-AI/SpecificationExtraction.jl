@@ -12,36 +12,40 @@
         variables=Dict([16 => :a])
         lhs = RuleNode(13, [RuleNode(16), RuleNode(3)]) # a+0
         rhs = RuleNode(3) # 0
+        e = EquivalenceSpecification(lhs, rhs)
 
-        c = spec2constraint(lhs, rhs, variables)
-        @test c isa ForbiddenTree
+        constraints = specs2constraints([e], variables)
+        @test length(constraints) == 1 && constraints[1] isa ForbiddenTree
     end
 
     @testset "2 × a ≡ a + a" begin
         variables=Dict([16 => :a])
         lhs = RuleNode(15, [RuleNode(5), RuleNode(16)]) # 2*a
         rhs = RuleNode(13, [RuleNode(16), RuleNode(16)]) # a+a
+        e = EquivalenceSpecification(lhs, rhs)
 
-        c = spec2constraint(lhs, rhs, variables)
-        @test c isa ForbiddenTree 
+        constraints = specs2constraints([e], variables)
+        @test length(constraints) == 1 && constraints[1] isa ForbiddenTree
     end
 
     @testset "a + a ≡ 2 × a" begin
         variables=Dict([16 => :a])
         lhs = RuleNode(13, [RuleNode(16), RuleNode(16)]) # a+a
         rhs = RuleNode(15, [RuleNode(5), RuleNode(16)]) # 2*a
+        e = EquivalenceSpecification(lhs, rhs)
 
-        c = spec2constraint(lhs, rhs, variables)
-        @test c isa ForbiddenTree 
+        constraints = specs2constraints([e], variables)
+        @test length(constraints) == 1 && constraints[1] isa ForbiddenTree
     end
 
     @testset "(a + b) + c ≡ a + (b + c)" begin
         variables = Dict([16 => :a, 17 => :b, 18 => :c])
         lhs = RuleNode(13, [RuleNode(13, [RuleNode(16), RuleNode(17)]), RuleNode(18)]) # (a + b) + c
         rhs = RuleNode(13, [RuleNode(16), RuleNode(13, [RuleNode(17), RuleNode(18)])]) # a + (b + c)
+        e = EquivalenceSpecification(lhs, rhs)
 
-        c = spec2constraint(lhs, rhs, variables)
-        @test c isa ForbiddenTree 
+        constraints = specs2constraints([e], variables)
+        @test length(constraints) == 1 && constraints[1] isa ForbiddenTree
     end
 
     @testset "6 + a ≡ a + 6" begin
@@ -49,9 +53,10 @@
         variables = Dict([16 => :a])
         lhs = RuleNode(13, [RuleNode(9), RuleNode(16)]) # 6 + a
         rhs = RuleNode(13, [RuleNode(16), RuleNode(9)]) # a + 6
+        e = EquivalenceSpecification(lhs, rhs)
 
-        c = spec2constraint(lhs, rhs, variables)
-        @test !(c isa ForbiddenTree) 
+        constraints = specs2constraints([e], variables)
+        @test length(constraints) == 1 && !(constraints[1] isa ForbiddenTree)
     end
 
     @testset "(3 + 2) + a ≡ a + (3 + 2)" begin
@@ -59,9 +64,10 @@
         variables = Dict([16 => :a])
         lhs = RuleNode(13, [RuleNode(13, [RuleNode(6), RuleNode(5)]), RuleNode(16)]) # (3 + 2) + a
         rhs = RuleNode(13, [RuleNode(16), RuleNode(13, [RuleNode(6), RuleNode(5)])]) # a + (3 + 2)
+        e = EquivalenceSpecification(lhs, rhs)
 
-        c = spec2constraint(lhs, rhs, variables)
-        @test !(c isa ForbiddenTree) 
+        constraints = specs2constraints([e], variables)
+        @test length(constraints) == 1 && !(constraints[1] isa ForbiddenTree)
     end
 
     @testset "(3 + 2) × 0 ≡ a × 0" begin
@@ -69,9 +75,11 @@
         variables = Dict([16 => :a])
         lhs = RuleNode(15, [RuleNode(13, [RuleNode(6), RuleNode(5)]), RuleNode(3)]) # (3 + 2) × 0
         rhs = RuleNode(15, [RuleNode(16), RuleNode(3)]) # a × 0
+        e = EquivalenceSpecification(lhs, rhs)
 
-        c = spec2constraint(lhs, rhs, variables)
-        @test !(c isa ForbiddenTree) # TODO: Update with what it should be instead 
+        constraints = specs2constraints([e], variables)
+        @test length(constraints) == 1 && !(constraints[1] isa ForbiddenTree)
+        # TODO: Update with what it should be instead 
     end
 
     @testset "a + b ≡ b + a" begin
@@ -79,8 +87,9 @@
 
         lhs = RuleNode(13, [RuleNode(16), RuleNode(17)]) # a + b
         rhs = RuleNode(13, [RuleNode(17), RuleNode(16)]) # b + a
-        
-        c = spec2constraint(lhs, rhs, variables)
-        @test c isa GlobalCommutativity
+        e = EquivalenceSpecification(lhs, rhs)
+
+        constraints = specs2constraints([e], variables)
+        @test length(constraints) == 1 && constraints[1] isa GlobalCommutativity
     end
 end 
