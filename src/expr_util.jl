@@ -133,10 +133,10 @@ end
 """
 Returns the set of variable indices that are used in the rulenode tree
 """
-function _get_variables_from_rulenode(rn::RuleNode, variables::Dict{Int, Symbol}) 
+function _get_variables_from_rulenode(rn::RuleNode, variables::Dict{Int, Symbol})::Set{Int}
     if rn.ind ∈ keys(variables)
-        return Set([rn.ind])
+        return Set{Int}([rn.ind])
     else
-        return union!(Set(), _get_variables_from_rulenode(x, variables) for x ∈ rn.children)
+        return union(Set{Int}(), (_get_variables_from_rulenode(x, variables) for x ∈ rn.children)...)
     end
 end

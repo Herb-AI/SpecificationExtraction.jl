@@ -61,7 +61,7 @@ function create_commutativity_constraints!(
     for (i, equivalence) ∈ enumerate(specifications)
         constraint_variables = _get_variables_from_rulenode(equivalence.lhs, variables)
         if length(constraint_variables) == 2 # TODO: Generalize
-            c = GlobalCommutativity(rulenode2matchnode(equivalence.lhs, variables), [variables[k] for k ∈ sort!(collect(keys(variables)))])
+            c = GlobalCommutativity(rulenode2matchnode(equivalence.lhs, variables), [variables[k] for k ∈ constraint_variables])
             push!(constraints, c)
             push!(deleted_specifications, i)
         end
