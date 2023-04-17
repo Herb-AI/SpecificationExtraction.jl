@@ -9,13 +9,13 @@ function specs2constraints(equivalences::Vector{EquivalenceSpecification}, varia
     specs = deepcopy(equivalences)
     constraints = PropagatorConstraint[]
 
-    create_forbidden_tree_constraints!(specs, constraints, variables)
-    create_commutativity_constraints!(specs, constraints, variables)
+    create_forbidden_constraints!(specs, constraints, variables)
+    create_ordered_constraints!(specs, constraints, variables)
 
     return constraints
 end
 
-function create_forbidden_tree_constraints!(
+function create_forbidden_constraints!(
     specifications::Vector{EquivalenceSpecification}, 
     constraints::Vector{PropagatorConstraint}, 
     variables::Dict{Int, Symbol}
@@ -40,7 +40,7 @@ function create_forbidden_tree_constraints!(
         # Detect if there exists a rulenode that matches both patterns
         circular = detect_circularity(rmn₁, rmn₂, Dict{Symbol, MatchNode}(), Dict{Symbol, Set{Symbol}}(s => Set{Symbol}([s]) for s ∈ rewritten_variables))
         if !circular
-            push!(constraints, ForbiddenTree(mn₁))
+            push!(constraints, Forbidden(mn₁))
             push!(deleted_specifications, i)
         end
     end
@@ -51,7 +51,7 @@ function create_forbidden_tree_constraints!(
     end
 end
 
-function create_commutativity_constraints!(
+function create_ordered_constraints!(
     specifications::Vector{EquivalenceSpecification}, 
     constraints::Vector{PropagatorConstraint},
     variables::Dict{Int, Symbol}
@@ -60,8 +60,9 @@ function create_commutativity_constraints!(
     deleted_specifications = Int[]
     for (i, equivalence) ∈ enumerate(specifications)
         constraint_variables = _get_variables_from_rulenode(equivalence.lhs, variables)
-        if length(constraint_variables) == 2 # TODO: Generalize
-            c = GlobalCommutativity(rulenode2matchnode(equivalence.lhs, variables), [variables[k] for k ∈ constraint_variables])
+
+        if length(constraint_variables) ≥ 2
+            c = Ordered(rulenode2matchnode(equivalence.lhs, variables), [variables[k] for k ∈ constraint_variables])
             push!(constraints, c)
             push!(deleted_specifications, i)
         end
@@ -74,7 +75,7 @@ function create_commutativity_constraints!(
 end
 
 
-function generalize_commutativity_constraints(constraints::Vector{GlobalCommutativity})   
+function generalize_ordered_constraints(constraints::Vector{Ordered})   
     orders = Dict{AbstractMatchNode, Set{Symbol}}
     for c ∈ constraints
         if c.tree ∉ keys(orders)

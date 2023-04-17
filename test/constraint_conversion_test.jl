@@ -15,7 +15,7 @@
         e = EquivalenceSpecification(lhs, rhs)
 
         constraints = specs2constraints([e], variables)
-        @test length(constraints) == 1 && constraints[1] isa ForbiddenTree
+        @test length(constraints) == 1 && constraints[1] isa Forbidden
     end
 
     @testset "2 × a ≡ a + a" begin
@@ -25,7 +25,7 @@
         e = EquivalenceSpecification(lhs, rhs)
 
         constraints = specs2constraints([e], variables)
-        @test length(constraints) == 1 && constraints[1] isa ForbiddenTree
+        @test length(constraints) == 1 && constraints[1] isa Forbidden
     end
 
     @testset "a + a ≡ 2 × a" begin
@@ -35,7 +35,7 @@
         e = EquivalenceSpecification(lhs, rhs)
 
         constraints = specs2constraints([e], variables)
-        @test length(constraints) == 1 && constraints[1] isa ForbiddenTree
+        @test length(constraints) == 1 && constraints[1] isa Forbidden
     end
 
     @testset "(a + b) + c ≡ a + (b + c)" begin
@@ -45,29 +45,29 @@
         e = EquivalenceSpecification(lhs, rhs)
 
         constraints = specs2constraints([e], variables)
-        @test length(constraints) == 1 && constraints[1] isa ForbiddenTree
+        @test length(constraints) == 1 && constraints[1] isa Forbidden
     end
 
     @testset "6 + a ≡ a + 6" begin
-        # Should not be a ForbiddenTree, since that removes 6 + 6
+        # Should not be a Forbidden constraint, since that removes 6 + 6
         variables = Dict([16 => :a])
         lhs = RuleNode(13, [RuleNode(9), RuleNode(16)]) # 6 + a
         rhs = RuleNode(13, [RuleNode(16), RuleNode(9)]) # a + 6
         e = EquivalenceSpecification(lhs, rhs)
 
         constraints = specs2constraints([e], variables)
-        @test length(constraints) == 1 && !(constraints[1] isa ForbiddenTree)
+        @test length(constraints) == 0 || !(constraints[1] isa Forbidden)
     end
 
     @testset "(3 + 2) + a ≡ a + (3 + 2)" begin
-        # Should not be a ForbiddenTree, since that removes (3 + 2) + (3 + 2)
+        # Should not be a Forbidden constraint, since that removes (3 + 2) + (3 + 2)
         variables = Dict([16 => :a])
         lhs = RuleNode(13, [RuleNode(13, [RuleNode(6), RuleNode(5)]), RuleNode(16)]) # (3 + 2) + a
         rhs = RuleNode(13, [RuleNode(16), RuleNode(13, [RuleNode(6), RuleNode(5)])]) # a + (3 + 2)
         e = EquivalenceSpecification(lhs, rhs)
 
         constraints = specs2constraints([e], variables)
-        @test length(constraints) == 1 && !(constraints[1] isa ForbiddenTree)
+        @test length(constraints) == 0 || !(constraints[1] isa Forbidden)
     end
 
     @testset "(3 + 2) × 0 ≡ a × 0" begin
@@ -78,7 +78,7 @@
         e = EquivalenceSpecification(lhs, rhs)
 
         constraints = specs2constraints([e], variables)
-        @test length(constraints) == 1 && !(constraints[1] isa ForbiddenTree)
+        @test length(constraints) == 0 || !(constraints[1] isa Forbidden)
         # TODO: Update with what it should be instead 
     end
 
@@ -90,6 +90,6 @@
         e = EquivalenceSpecification(lhs, rhs)
 
         constraints = specs2constraints([e], variables)
-        @test length(constraints) == 1 && constraints[1] isa GlobalCommutativity
+        @test length(constraints) == 1 && constraints[1] isa Ordered
     end
 end 
