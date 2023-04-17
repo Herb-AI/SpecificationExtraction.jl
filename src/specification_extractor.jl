@@ -97,7 +97,7 @@ The left-hand sides of the expressions stay in the order of the equivalence clas
 """
 function equivalence_class2specs(grammar::Grammar, equivalence_class)::Vector{EquivalenceSpecification}
     # Find program with smallest size for the minimal depth.
-    rhs = argmin(x -> _expr_depth_size_vars(x, grammar), equivalence_class)
+    rhs = argmin(x -> (_expr_depth_size_vars(x, grammar), x), equivalence_class)
 
     equivalences = EquivalenceSpecification[]
     for lhs ∈ equivalence_class
