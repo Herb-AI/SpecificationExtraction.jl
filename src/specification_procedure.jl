@@ -25,8 +25,8 @@ returns them in the form of constraints.
   """
 function constraint_discovery(
     grammar::Grammar,
-    candidate_depth::Int;
-    generator_depth::Int=2,
+    candidate_depth::Int,
+    generator_depth::Int;
     num_programs_per_type::Int=1000,
     num_variables_per_type::Int=1
 )::Vector{PropagatorConstraint}
@@ -92,4 +92,30 @@ function constraint_discovery(
         end
     end
     return constraints
+end
+
+function specification_discovery(
+    grammar::Grammar,
+    relation_grammar::Grammar;
+    relation_depth::Int=1
+)
+
+    g = deepcopy(grammar)
+
+    # Remove any variables from the grammar
+    variable_rules = findall(x -> isvariable(g, x), 1:length(g.rules))
+    for idx ∈ variable_rules
+        remove_rule!(g, idx)
+    end
+
+    num_types = Dict{Symbol, Int}(t => 0 for t ∈ g.types)
+    for types ∈ g.childtypes
+        for t ∈ g.types
+            # Update maximum number of variables necessary per type
+            num_types[t] = max(num_types[t], count(isequal(t), types))
+        end
+    end
+
+    @show num_types
+
 end
