@@ -12,8 +12,6 @@ function exhaustive_auto_generator(grammar, max_depth, type)::Function
     end
     cleanup_removed_rules!(g₁)
 
-    @show g₁.childtypes
-
     # Enumerate trees 
     possible_values_set = Set()
     symboltable::SymbolTable = SymbolTable(g₁)

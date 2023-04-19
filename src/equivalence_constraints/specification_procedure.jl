@@ -10,6 +10,9 @@ function rulenode2matchnode(rn::RuleNode, variables::Dict{Int, Symbol})::Abstrac
     return MatchNode(rn.ind, [rulenode2matchnode(c, variables) for c ∈ rn.children])
 end
 
+"""
+Returns `true` if the rulenode contains any of the rules included in `vars`
+"""
 containsrule(rn::RuleNode, vars::Vector{Int}) = rn.ind ∈ vars || any(containsrule(c, vars) for c ∈ rn.children)
 
 
@@ -94,28 +97,3 @@ function constraint_discovery(
     return constraints
 end
 
-function specification_discovery(
-    grammar::Grammar,
-    relation_grammar::Grammar;
-    relation_depth::Int=1
-)
-
-    g = deepcopy(grammar)
-
-    # Remove any variables from the grammar
-    variable_rules = findall(x -> isvariable(g, x), 1:length(g.rules))
-    for idx ∈ variable_rules
-        remove_rule!(g, idx)
-    end
-
-    num_types = Dict{Symbol, Int}(t => 0 for t ∈ g.types)
-    for types ∈ g.childtypes
-        for t ∈ g.types
-            # Update maximum number of variables necessary per type
-            num_types[t] = max(num_types[t], count(isequal(t), types))
-        end
-    end
-
-    @show num_types
-
-end

@@ -7,13 +7,15 @@ using ..HerbConstraints
 using Base.Iterators
 using ProgressBars
 
-include("specification.jl")
+include("equivalence_constraints/specification.jl")
 include("expr_util.jl")
-include("specification_extractor.jl")
-include("pruning.jl")
+include("equivalence_constraints/specification_extractor.jl")
+include("equivalence_constraints/pruning.jl")
 include("auto_generator.jl")
-include("specification_procedure.jl")
-include("constraint_conversion.jl")
+include("equivalence_constraints/specification_procedure.jl")
+include("equivalence_constraints/constraint_conversion.jl")
+
+include("specification_constraints/procedure.jl")
 
 export
     Specification,
