@@ -1,5 +1,3 @@
-using Z3
-
 """
 Converts a rulenode to a matchnode.
 """
@@ -28,8 +26,10 @@ returns them in the form of constraints.
   """
 function constraint_discovery(
     grammar::Grammar,
-    candidate_depth::Int,
-    generator_depth::Int;
+    candidate_max_size::Int;
+    candidate_max_depth::Int=typemax(Int),
+    max_generator_ast_depth::Int=typemax(Int),
+    max_generator_ast_size::Int=5,
     num_programs_per_type::Int=1000,
     num_variables_per_type::Int=1
 )::Vector{PropagatorConstraint}
@@ -39,7 +39,7 @@ function constraint_discovery(
     # Create data generators and variable specification for each data type
     generators::Dict{Symbol, Function} = Dict()
     for type ∈ types
-        generators[type] = exhaustive_auto_generator(grammar, generator_depth, type)
+        generators[type] = exhaustive_auto_generator(grammar, max_generator_ast_depth, max_generator_ast_size, type)
     end
 
     g = deepcopy(grammar)
@@ -70,7 +70,16 @@ function constraint_discovery(
     # Extract specifications
     constraints = []
     for type ∈ types
-        equivalence_classes = get_equivalences(g, num_programs_per_type, type, generators, type_by_variable, variables_by_type, max_depth=candidate_depth)
+        equivalence_classes = get_equivalences(
+            g, 
+            num_programs_per_type, 
+            type, 
+            generators, 
+            type_by_variable, 
+            variables_by_type, 
+            max_depth=candidate_max_depth,
+            max_size=candidate_max_size
+        )
 
         # Remove all equivalence classes with length < 2
         equivalence_classes = filter!(x -> length(x) ≥ 2, equivalence_classes) 

@@ -2,7 +2,7 @@
 Converts equivalences to specifications and prunes them.
 """
 function equivalences2specs(grammar::Grammar, equivalence_classes, vars::Dict{Int, Symbol})
-    priority_function = isprobabilistic(grammar) ? rulenode_probability : _expr_depth_size_vars
+    priority_function = isprobabilistic(grammar) ? rulenode_probability : _expr_size_vars
 
     # Helper function for finding the best expression in an equivalence class
     best_element(ec) = minimum(map(x -> priority_function(x, grammar), ec))
@@ -83,23 +83,20 @@ function equivalences2specs(grammar::Grammar, equivalence_classes, vars::Dict{In
                 continue
             end
             # equivalence_classes[j] is still sorted.
-            for equivalence ∈ specs
-                constraints = specs2constraints([equivalence], vars)
-                for constraint ∈ constraints
-                    redundant_node_indices = []
-                    for (node_ind, node) ∈ enumerate(equivalence_classes[j])
-                        if !check_tree(constraint, grammar, node)
-                            # The tree didn't abide the constraint and thus will not be generated 
-                            # if we would use the current constraint in the search.
-                            # This makes the constraint corresponding to this node redundant.
-                            push!(redundant_node_indices, node_ind)
-                        end
+            for constraint ∈ specs2constraints(specs, vars)
+                redundant_node_indices = []
+                for (node_ind, node) ∈ enumerate(equivalence_classes[j])
+                    if !check_tree(constraint, grammar, node)
+                        # The tree didn't abide the constraint and thus will not be generated 
+                        # if we would use the current constraint in the search.
+                        # This makes the constraint corresponding to this node redundant.
+                        push!(redundant_node_indices, node_ind)
                     end
-        
-                    # Remove redundant node indices in reverse, since otherwise indices shift.
-                    for node_ind ∈ reverse!(redundant_node_indices)
-                        deleteat!(equivalence_classes[j], node_ind)
-                    end
+                end
+    
+                # Remove redundant node indices in reverse, since otherwise indices shift.
+                for node_ind ∈ reverse!(redundant_node_indices)
+                    deleteat!(equivalence_classes[j], node_ind)
                 end
             end
 

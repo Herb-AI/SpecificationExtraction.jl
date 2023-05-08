@@ -101,11 +101,12 @@ function specification_generation(
     type_by_variable::Dict{Symbol, Symbol},
     variable_ids_by_type::Dict{Symbol, Vector{Int}};
     max_depth::Int=typemax(Int),
+    max_size::Int=typemax(Int),
     batch_size::Int=64,
     required_batches_after_last_invalidation::Int=5
 )
     relations::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}} = []
-    enumerator = get_bfs_enumerator(relation_grammar, max_depth, :Bool)
+    enumerator = get_bfs_enumerator(relation_grammar, max_depth, max_size, :Bool)
     variable_ids = append!(Int[], [v for (k, v) ∈ variable_ids_by_type]...)
 
     for _ ∈ 1:numprograms

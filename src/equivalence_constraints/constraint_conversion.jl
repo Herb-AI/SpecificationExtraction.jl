@@ -12,6 +12,8 @@ function specs2constraints(equivalences::Vector{EquivalenceSpecification}, varia
     create_forbidden_constraints!(specs, constraints, variables)
     create_ordered_constraints!(specs, constraints, variables)
 
+    generalize_ordered_constraints(constraints)
+
     return constraints
 end
 
@@ -75,16 +77,20 @@ function create_ordered_constraints!(
 end
 
 
-function generalize_ordered_constraints(constraints::Vector{Ordered})   
-    orders = Dict{AbstractMatchNode, Set{Symbol}}
-    for c ∈ constraints
+function generalize_ordered_constraints(constraints::Vector{PropagatorConstraint})   
+    ordered_constraints = filter(x -> x isa Ordered, constraints)
+    filter!(x -> !(x isa Ordered), constraints)
+    orders = Dict{AbstractMatchNode, Set{Symbol}}()
+    for c ∈ ordered_constraints
         if c.tree ∉ keys(orders)
             orders[c.tree] = Set(c.order)
         else
             union!(orders[c.tree], Set(c.order))
         end
     end
-    return orders
+    for (pattern, order) ∈ orders
+        push!(constraints, Ordered(pattern, collect(order)))
+    end
 end
 
 function copy_and_rewrite_variable_names(mn::MatchNode, rewrite::Function)

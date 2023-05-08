@@ -14,6 +14,7 @@ function get_equivalences(
         type_by_variable::Dict{Symbol, Symbol},
         variables_by_type::Dict{Symbol, Vector{Symbol}};
         max_depth::Int=typemax(Int),
+        max_size::Int=typemax(Int),
         batch_size::Int=64,
         num_batches_after_last_split::Int=5
     )
@@ -22,18 +23,21 @@ function get_equivalences(
         get_most_likely_first_enumerator :
         get_bfs_enumerator)
     
-    enumerator = enumerator_constructor(g, max_depth, start_symbol)
+    enumerator = enumerator_constructor(g, max_depth, max_size, start_symbol)
 
     # Enumerate a lot of programs and precompute their expressions
     programs::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}} = []
     println("Generating expressions")
-    @show g.rules
+    open("programs.txt", "w") do f
     for _ ∈ ProgressBar(1:numprograms)
         next = Iterators.peel(enumerator)
         next ≡ nothing && break
         x, enumerator = next
+        write(f, "$(rulenode2expr(x, g))\n")
         push!(programs, (rulenode = x, expr = rulenode2expr(x, g)))
     end
+    end
+
     
     # Only allow programs that when using a variable also use all variables of the same type 
     # that are defined above it in the grammar.
@@ -96,8 +100,8 @@ The simplest tree is also used in every equality.
 The left-hand sides of the expressions stay in the order of the equivalence class. 
 """
 function equivalence_class2specs(grammar::Grammar, equivalence_class)::Vector{EquivalenceSpecification}
-    # Find program with smallest size for the minimal depth.
-    rhs = argmin(x -> (_expr_depth_size_vars(x, grammar), x), equivalence_class)
+    # Find program with smallest size.
+    rhs = argmin(x -> (_expr_size_vars(x, grammar), x), equivalence_class)
 
     equivalences = EquivalenceSpecification[]
     for lhs ∈ equivalence_class

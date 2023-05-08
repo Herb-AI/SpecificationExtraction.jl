@@ -3,7 +3,7 @@
 Searches the grammar up to the maximum depth for possible values of a type.
 Doesn't account for data that might be introduced via the input variables.
 """
-function exhaustive_auto_generator(grammar, max_depth, type)::Function
+function exhaustive_auto_generator(grammar, max_depth, max_size, type)::Function
     # Remove any variable rules
     g₁ = deepcopy(grammar)
     variable_rules = findall(x -> isvariable(g₁, x), 1:length(g₁.rules))
@@ -15,7 +15,7 @@ function exhaustive_auto_generator(grammar, max_depth, type)::Function
     # Enumerate trees 
     possible_values_set = Set()
     symboltable::SymbolTable = SymbolTable(g₁)
-    for tree ∈ get_dfs_enumerator(g₁, max_depth, type)
+    for tree ∈ get_dfs_enumerator(g₁, max_depth, max_size, type)
         output = interpret(symboltable, rulenode2expr(tree, g₁))
         push!(possible_values_set, output)
     end

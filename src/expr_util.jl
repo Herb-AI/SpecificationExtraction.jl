@@ -110,23 +110,20 @@ end
 
 
 """
-Returns a tuple with three integers. 
-
-    1. The maximum depth of the rulenode.
-    2. The number of nodes in the rulenode.
-    3. The number of non-variable terminals in the rulenode.
+Returns a tuple with two integers. 
+    1. The number of nodes in the rulenode.
+    2. The number of non-variable terminals in the rulenode.
 This tuple signifies the generality of rulenodes for specification generation and can be used for sorting.
 """
-function _expr_depth_size_vars(node::RuleNode, g::Grammar)::Tuple{Int, Int, Int}
+function _expr_size_vars(node::RuleNode, g::Grammar)::Tuple{Int, Int}
     if isvariable(g, node)
-        return (0, 1, 0)
+        return (1, 0)
     elseif isterminal(g, node)
-        return (0, 1, 1)
+        return (1, 1)
     end
-    child_depth_size_vars = collect(zip(collect(map(x -> _expr_depth_size_vars(x, g), node.children))...))
-    return (maximum(child_depth_size_vars[1], init=0) + 1, 
-        sum(child_depth_size_vars[2]) + 1, 
-        sum(child_depth_size_vars[3])
+    child_size_vars = collect(zip(collect(map(x -> _expr_size_vars(x, g), node.children))...))
+    return (sum(child_size_vars[1]) + 1, 
+        sum(child_size_vars[2])
     )
 end
 
