@@ -28,16 +28,12 @@ function get_equivalences(
     # Enumerate a lot of programs and precompute their expressions
     programs::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}} = []
     println("Generating expressions")
-    open("programs.txt", "w") do f
     for _ ∈ ProgressBar(1:numprograms)
         next = Iterators.peel(enumerator)
         next ≡ nothing && break
         x, enumerator = next
-        write(f, "$(rulenode2expr(x, g))\n")
         push!(programs, (rulenode = x, expr = rulenode2expr(x, g)))
     end
-    end
-
     
     # Only allow programs that when using a variable also use all variables of the same type 
     # that are defined above it in the grammar.

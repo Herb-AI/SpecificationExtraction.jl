@@ -9,29 +9,44 @@ function rulenode2matchnode(rn::RuleNode, variables::Dict{Int, Symbol})::Abstrac
 end
 
 """
-Returns `true` if the rulenode contains any of the rules included in `vars`
+Returns `true` if the rulenode contains any of the rules included in `rules`
+# Arguments
+  - `rn::RuleNode`:         The RuleNode tree to check
+  - `rules::Vector{Int}`:   A list of rule indices to check fosr
 """
-containsrule(rn::RuleNode, vars::Vector{Int}) = rn.ind ∈ vars || any(containsrule(c, vars) for c ∈ rn.children)
+containsrule(rn::RuleNode, rules::Vector{Int}) = rn.ind ∈ rules || any(containsrule(c, rules) for c ∈ rn.children)
 
 
 """
 Automatically discovers specifications in the provided grammar and
 returns them in the form of constraints.
 # Arguments
-  - `grammar::Grammar`: The grammar from which specifications should be extracted
-  - `candidate_depth::Int`: The maximum depth for the candidate programs for generating specifications.
-  - `generator_depth::Int`: The maximum depth for the automatic generators for types in the grammar.
-  - `num_programs_per_type::Int`: The number of programs that should be enumerated for each type in the specification discovery.
-  - `num_variables_per_type::Int`: The maximum number of unique variables that can be used in a specification.
+  - `grammar::Grammar`:                 The grammar from which specifications should be extracted.
+  - `candidate_max_size::Int`:          The maximum number of nodes in the candidate programs for 
+                                        generating specifications.
+  - `candidate_max_depth::Int`:         The maximum depth for the candidate programs for generating 
+                                        specifications. Set to `typemax(Int)` by default.
+  - `max_generator_ast_size`:           The maximum number of nodes for the automatic generators 
+                                        for types in the grammar. Set to 5 by default.
+  - `max_generator_ast_depth::Int`:     The maximum depth for the automatic generators for types 
+                                        in the grammar. Set to `typemax(Int) by default.
+  - `num_programs_per_type::Int`:       The number of programs that should be enumerated for each 
+                                        type in the specification discovery. Set to 1000 by default.
+  - `num_variables_per_type::Int`:      The maximum number of unique variables that can be used in 
+                                        a specification. Set to 2 by default.
+  - `only_general_constraints::Bool`:   Determines whether only general constraints (that contain) 
+                                        variables should be generated or also specific constraints
+                                        that do not contain variables.
   """
 function constraint_discovery(
     grammar::Grammar,
     candidate_max_size::Int;
     candidate_max_depth::Int=typemax(Int),
-    max_generator_ast_depth::Int=typemax(Int),
     max_generator_ast_size::Int=5,
+    max_generator_ast_depth::Int=typemax(Int),
     num_programs_per_type::Int=1000,
-    num_variables_per_type::Int=1
+    num_variables_per_type::Int=2,
+    only_general_constraints::Bool=true
 )::Vector{PropagatorConstraint}
 
     types = keys(grammar.bytype)
@@ -80,7 +95,7 @@ function constraint_discovery(
             max_depth=candidate_max_depth,
             max_size=candidate_max_size
         )
-
+        
         # Remove all equivalence classes with length < 2
         equivalence_classes = filter!(x -> length(x) ≥ 2, equivalence_classes) 
 
@@ -92,12 +107,21 @@ function constraint_discovery(
             variables[v.index] = v.var
         end
 
-        for specs ∈ pruned_specs
-            append!(constraints, specs2constraints(filter(x -> containsrule(x.lhs, [v.index for v ∈ input_variables]), specs), variables))
-
-            # TODO: Remove printing
-            for equivalence ∈ specs
-                if containsrule(equivalence.lhs, [v.index for v ∈ input_variables])
+        if only_general_constraints
+            for specs ∈ pruned_specs
+                append!(constraints, specs2constraints(filter(x -> containsrule(x.lhs, [v.index for v ∈ input_variables]), specs), variables))
+                # TODO: Remove printing
+                for equivalence ∈ specs
+                    if containsrule(equivalence.lhs, [v.index for v ∈ input_variables])
+                        println("$(rulenode2expr(equivalence.lhs, g)) → $(rulenode2expr(equivalence.rhs, g))")
+                    end
+                end
+            end
+        else
+            for specs ∈ pruned_specs
+                append!(constraints, specs2constraints(specs, variables))
+                # TODO: Remove printing
+                for equivalence ∈ specs
                     println("$(rulenode2expr(equivalence.lhs, g)) → $(rulenode2expr(equivalence.rhs, g))")
                 end
             end
