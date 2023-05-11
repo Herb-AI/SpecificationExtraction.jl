@@ -26,10 +26,11 @@ returns them in the form of constraints.
                                         generating specifications.
   - `candidate_max_depth::Int`:         The maximum depth for the candidate programs for generating 
                                         specifications. Set to `typemax(Int)` by default.
+  - `generators::Dict{Symbol, Function}`:A set of generators that have already been defined by the
+                                        user. If generators for certain types are missing, a new
+                                        generator is automatically created for this type.  
   - `max_generator_ast_size`:           The maximum number of nodes for the automatic generators 
                                         for types in the grammar. Set to 5 by default.
-  - `max_generator_ast_depth::Int`:     The maximum depth for the automatic generators for types 
-                                        in the grammar. Set to `typemax(Int) by default.
   - `num_programs_per_type::Int`:       The number of programs that should be enumerated for each 
                                         type in the specification discovery. Set to 1000 by default.
   - `num_variables_per_type::Int`:      The maximum number of unique variables that can be used in 
@@ -42,8 +43,8 @@ function constraint_discovery(
     grammar::Grammar,
     candidate_max_size::Int;
     candidate_max_depth::Int=typemax(Int),
+    generators::Dict{Symbol, Function}=Dict{Symbol, Function}(),
     max_generator_ast_size::Int=5,
-    max_generator_ast_depth::Int=typemax(Int),
     num_programs_per_type::Int=1000,
     num_variables_per_type::Int=2,
     only_general_constraints::Bool=true
@@ -51,10 +52,11 @@ function constraint_discovery(
 
     types = keys(grammar.bytype)
 
-    # Create data generators and variable specification for each data type
-    generators::Dict{Symbol, Function} = Dict()
+    # Create data missing generators
     for type ∈ types
-        generators[type] = exhaustive_auto_generator(grammar, max_generator_ast_depth, max_generator_ast_size, type)
+        if type ∉ keys(generators)
+            generators[type] = exhaustive_auto_generator(grammar, type, max_generator_ast_size)
+        end
     end
 
     g = deepcopy(grammar)
