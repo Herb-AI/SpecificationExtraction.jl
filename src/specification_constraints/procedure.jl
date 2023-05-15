@@ -1,6 +1,29 @@
+abstract type SpecificationSymbol end
+
+"""
+Used for signifying a rule as a variable.
+Gets converted to a sympy variable.
+"""
+struct SpecificationVariable <: SpecificationSymbol end
+
+"""
+Used for signifying a rule as an operator.
+`sympy_equivalent` represents operator to which this gets translated in sympy representation.
+"""
+struct SpecificationOperator <: SpecificationSymbol
+    sympy_equivalent::Function
+end
+
+"""
+Used for signifying a rule as a literal.
+Gets evaluated before converting to sympy representation.
+"""
+struct SpecificationLiteral <: SpecificationSymbol end
+
 function specification_discovery(
     grammar::Grammar,
     relation_grammar::Grammar,
+    translation::Dict{Int, SpecificationSymbol},
     candidate_max_size::Int,
     generator_max_size::Int;
     generators::Dict{Symbol, Function}=Dict{Symbol, Function}(),
@@ -18,9 +41,10 @@ function specification_discovery(
         remove_rule!(grammar_without_vars, idx)
     end
 
-    # Remove any variables from the relation grammar to ensure that it can be evaluated
+    # Remove any variables from the relation grammars to ensure that it can be evaluated
     relation_variable_rules = findall(x -> isvariable(rg_without_vars, x), 1:length(rg_without_vars.rules))
     for idx ∈ relation_variable_rules
+        println("rule $idx removed")
         remove_rule!(rg_without_vars, idx)
     end
 
@@ -62,6 +86,7 @@ function specification_discovery(
             varname = Symbol("VarInput$type$(type_counter[type])")
             add_rule!(rg, :($relation_type = $varname))
             add_rule!(g, :($type = $varname))
+            translation[length(rg.rules)] = SpecificationVariable()
             push!(rulenode_under_test.children, RuleNode(length(g.rules)))
             push!(relation_variable_ids_by_type[type], length(rg.rules))
             type_by_variable[varname] = type
@@ -73,6 +98,7 @@ function specification_discovery(
         varname = Symbol("VarOutput$(g.types[i])")
         add_rule!(rg, :($typesymbol = $varname))
         push!(relation_variable_ids_by_type[g.types[i]], length(rg.rules))
+        translation[length(rg.rules)] = SpecificationVariable()
 
         relations = specification_generation(
             g, 
@@ -86,124 +112,57 @@ function specification_discovery(
             max_size=candidate_max_size
         )
 
-        for relation ∈ relations
-            @show relation.expr
-        end
-    end
+        # for relation ∈ relations
+        #     @show relation.expr
+        # end
 
+        prune_relations(rg, translation, relations)
+    end
 end
 
 function rulenode2sympy(
     grammar::Grammar,
-    rn::RuleNode,
-    variables::Dict{String, PyObject},
-    property_rulenodes::Set{Int}, 
-    operator_translation::Dict{Int, }
+    translation::Dict{Int, SpecificationSymbol},
+    rn::RuleNode
 )
-    if rn.ind ∈ property_rulenodes
+    t = translation[rn.ind]
+    if t isa SpecificationVariable
         expr = rulenode2expr(rn, grammar)
         varname = replace("$expr", "(" => "", ")" => "")
         return sympy.Symbol(varname)
+    elseif t isa SpecificationOperator
+        sympy_children = map(x -> rulenode2sympy(grammar, translation, x), rn.children)
+        return t.sympy_equivalent(sympy_children...)
+    else
+        expr = rulenode2expr(rn, grammar)
+        return eval(expr) 
     end
-
-    if rn.ind ∈ keys(operator_translation)
-        sympy_children = map(x -> rulenode2sympy(grammar, x, variables, property_rulenodes, operator_translation), rn.children)
-        return operator_translation[rn.ind](sympy_children...)
-    end
-
-    expr = rulenode2expr(rn, grammar)
-    return eval(expr) 
 end
 
 function prune_relations(
     grammar::Grammar,
+    translation::Dict{Int, SpecificationSymbol},
     relations::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}},
-    property_rulenodes::Set{Int},
-    comparison_operators::Dict{Int, }
 )
     # Turn relation into SymPy representation
     sympy_terms = []
     for relation ∈ relations
         sympy_term = rulenode2sympy(
             grammar,
-            relation.rulenode,
-            Dict{String, PyObject}(),
-            property_rulenodes,
-            comparison_operators
+            translation,
+            relation.rulenode        
         )
         push!(sympy_terms, sympy_term)
     end
     sympy_representation = sympy.And(sympy_terms...)
     y = sympy.simplify(sympy_representation)
-    @show y
-end
-
-function specification_generation(
-    grammar::Grammar,
-    numprograms::Int,
-    tested_rule_ind::Int,
-    tested_rule_expr::Any,
-    relation_grammar::Grammar,
-    data_generators::Dict{Symbol, Function},
-    type_by_variable::Dict{Symbol, Symbol},
-    variable_ids_by_type::Dict{Symbol, Vector{Int}};
-    max_depth::Int=typemax(Int),
-    max_size::Int=typemax(Int),
-    batch_size::Int=64,
-    required_batches_after_last_invalidation::Int=5
-)::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}}
-    relations::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}} = []
-    enumerator = get_bfs_enumerator(relation_grammar, max_depth, max_size, :Bool)
-    variable_ids = append!(Int[], [v for (k, v) ∈ variable_ids_by_type]...)
-
-    for _ ∈ 1:numprograms
-        next = Iterators.peel(enumerator)
-        next ≡ nothing && break # All programs enumerated
-        x, enumerator = next
-        push!(relations, (rulenode = x, expr = rulenode2expr(x, relation_grammar)))
-    end
-
-    # Filter out any relations that don't contain variables
-    filter!(x -> containsrule(x.rulenode, variable_ids), relations)
-
-
-    g_symboltable = SymbolTable(grammar)
-    rg_symboltable = SymbolTable(relation_grammar)
-
-
-    # Filter any false specification from programs
-    batches_since_last_invalidation = 0
-    while batches_since_last_invalidation < required_batches_after_last_invalidation
-        # Create tests
-        tests = []
-        for _ ∈ 1:batch_size
-            rule_test::SymbolTable = Dict{Symbol, Any}()
-            test::SymbolTable = Dict{Symbol, Any}()
-            type_counter = Dict{Symbol, Int}(t => 0 for t ∈ grammar.types)
-            for type ∈ grammar.childtypes[tested_rule_ind]
-                i = type_counter[type] += 1
-                
-                generated_value = data_generators[type]()
-                varname = Symbol("VarInput$type$i") 
-                test[varname] = generated_value
-                rule_test[varname] = generated_value
-            end
-            output_value = test_with_input(g_symboltable, tested_rule_expr, rule_test)
-            test[Symbol("VarOutput$(grammar.types[tested_rule_ind])")] = output_value
-            push!(tests, test)
+    if pybuiltin(:type)(y) == sympy.And
+        for t ∈ y.args
+            spec = replace(string(t), "PyObject" => "")
+            println(spec)
         end
-
-        # Filter any relation that doesn't return true for all tests
-        size_before = length(relations)
-        filter!(r -> all(test_with_input(rg_symboltable, r.expr, t) for t ∈ tests), relations)
-        size_after = length(relations)
-
-        if size_before == size_after
-            batches_since_last_invalidation += 1
-        else
-            batches_since_last_invalidation = 0
-        end
+    else
+        spec = replace(string(y), "PyObject" => "")
+        println(spec)    
     end
-
-    return relations
 end

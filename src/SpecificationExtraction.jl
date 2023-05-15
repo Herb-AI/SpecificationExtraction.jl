@@ -19,11 +19,17 @@ include("auto_generator.jl")
 include("equivalence_constraints/specification_procedure.jl")
 include("equivalence_constraints/constraint_conversion.jl")
 
+include("specification_constraints/specification_generation.jl")
 include("specification_constraints/procedure.jl")
 
 export
     Specification,
     EquivalenceSpecification,
+
+    SpecificationSymbol,
+    SpecificationVariable,
+    SpecificationOperator,
+    SpecificationLiteral,
 
     get_equivalences,
     exhaustive_auto_generator,
