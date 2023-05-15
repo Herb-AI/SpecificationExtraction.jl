@@ -1,8 +1,9 @@
 function specification_discovery(
     grammar::Grammar,
     relation_grammar::Grammar,
-    candidate_depth::Int,
-    generator_depth::Int;
+    candidate_max_size::Int,
+    generator_max_size::Int;
+    generators::Dict{Symbol, Function}=Dict{Symbol, Function}(),
     numprograms::Int=1000
 )
     @assert :Bool ∈ relation_grammar.types
@@ -11,22 +12,23 @@ function specification_discovery(
 
     grammar_without_vars = deepcopy(grammar)
 
-    # Remove any variables from the grammar
+    # Remove any variables from the grammar to ensure that it can be evaluated
     variable_rules = findall(x -> isvariable(grammar_without_vars, x), 1:length(grammar_without_vars.rules))
     for idx ∈ variable_rules
         remove_rule!(grammar_without_vars, idx)
     end
 
-    # Remove any variables from the relation grammar
+    # Remove any variables from the relation grammar to ensure that it can be evaluated
     relation_variable_rules = findall(x -> isvariable(rg_without_vars, x), 1:length(rg_without_vars.rules))
     for idx ∈ relation_variable_rules
         remove_rule!(rg_without_vars, idx)
     end
 
     # Create data generators
-    generators::Dict{Symbol, Function} = Dict()
     for type ∈ grammar_without_vars.types
-        generators[type] = exhaustive_auto_generator(grammar_without_vars, generator_depth, type)
+        if type ∉ keys(generators)
+            generators[type] = exhaustive_auto_generator(grammar_without_vars, type, generator_max_size)
+        end
     end
 
     # Add types to the relation grammar
@@ -81,7 +83,7 @@ function specification_discovery(
             generators, 
             type_by_variable, 
             relation_variable_ids_by_type,
-            max_depth=candidate_depth
+            max_size=candidate_max_size
         )
 
         for relation ∈ relations
@@ -91,8 +93,53 @@ function specification_discovery(
 
 end
 
+function rulenode2sympy(
+    grammar::Grammar,
+    rn::RuleNode,
+    variables::Dict{String, PyObject},
+    property_rulenodes::Set{Int}, 
+    operator_translation::Dict{Int, }
+)
+    if rn.ind ∈ property_rulenodes
+        expr = rulenode2expr(rn, grammar)
+        varname = replace("$expr", "(" => "", ")" => "")
+        return sympy.Symbol(varname)
+    end
+
+    if rn.ind ∈ keys(operator_translation)
+        sympy_children = map(x -> rulenode2sympy(grammar, x, variables, property_rulenodes, operator_translation), rn.children)
+        return operator_translation[rn.ind](sympy_children...)
+    end
+
+    expr = rulenode2expr(rn, grammar)
+    return eval(expr) 
+end
+
+function prune_relations(
+    grammar::Grammar,
+    relations::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}},
+    property_rulenodes::Set{Int},
+    comparison_operators::Dict{Int, }
+)
+    # Turn relation into SymPy representation
+    sympy_terms = []
+    for relation ∈ relations
+        sympy_term = rulenode2sympy(
+            grammar,
+            relation.rulenode,
+            Dict{String, PyObject}(),
+            property_rulenodes,
+            comparison_operators
+        )
+        push!(sympy_terms, sympy_term)
+    end
+    sympy_representation = sympy.And(sympy_terms...)
+    y = sympy.simplify(sympy_representation)
+    @show y
+end
+
 function specification_generation(
-    grammar::Grammar, 
+    grammar::Grammar,
     numprograms::Int,
     tested_rule_ind::Int,
     tested_rule_expr::Any,
@@ -104,7 +151,7 @@ function specification_generation(
     max_size::Int=typemax(Int),
     batch_size::Int=64,
     required_batches_after_last_invalidation::Int=5
-)
+)::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}}
     relations::Vector{NamedTuple{(:rulenode, :expr), Tuple{RuleNode, Any}}} = []
     enumerator = get_bfs_enumerator(relation_grammar, max_depth, max_size, :Bool)
     variable_ids = append!(Int[], [v for (k, v) ∈ variable_ids_by_type]...)

@@ -4,8 +4,12 @@ using ..HerbGrammar
 using ..HerbSearch
 using ..HerbEvaluation
 using ..HerbConstraints
+
 using Base.Iterators
 using ProgressBars
+using PyCall
+
+sympy = pyimport("sympy")
 
 include("equivalence_constraints/specification.jl")
 include("expr_util.jl")
