@@ -112,14 +112,14 @@ end
 """
 Returns a tuple with two integers. 
     1. The number of nodes in the rulenode.
-    2. The number of non-variable terminals in the rulenode.
+    2. The number of variable terminals in the rulenode.
 This tuple signifies the generality of rulenodes for specification generation and can be used for sorting.
 """
 function _expr_size_vars(node::RuleNode, g::Grammar)::Tuple{Int, Int}
     if isvariable(g, node)
-        return (1, 0)
-    elseif isterminal(g, node)
         return (1, 1)
+    elseif isterminal(g, node)
+        return (1, 0)
     end
     child_size_vars = collect(zip(collect(map(x -> _expr_size_vars(x, g), node.children))...))
     return (sum(child_size_vars[1]) + 1, 
