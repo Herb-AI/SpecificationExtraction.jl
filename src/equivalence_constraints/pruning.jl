@@ -83,7 +83,8 @@ function equivalences2specs(grammar::Grammar, equivalence_classes, vars::Dict{In
                 continue
             end
             # equivalence_classes[j] is still sorted.
-            for constraint ∈ specs2constraints(specs, vars)
+            constraints = specs2constraints(specs, vars)
+            for constraint ∈ constraints
                 redundant_node_indices = []
                 for (node_ind, node) ∈ enumerate(equivalence_classes[j])
                     if !check_tree(constraint, grammar, node)
@@ -110,3 +111,6 @@ function equivalences2specs(grammar::Grammar, equivalence_classes, vars::Dict{In
 
     return map(x -> equivalence_class2specs(grammar, x), filter(x -> x ≠ [], equivalence_classes))
 end
+
+matchnode2rulenode(mn::MatchNode, g::Grammar) = RuleNode(mn.rule_ind, [matchnode2rule(c, g) for c ∈ mn.children])
+matchnode2rulenode(mv::MatchVar, g::Grammar) = RuleNode(indexin(mv.var_name, g.rules))

@@ -5,13 +5,16 @@ The `variables` dict has an entry for each variable with the key being the rulen
 index of the variable and as value the associated variable.
 This is necessary for converting RuleNodes to MatchVars.
 """
-function specs2constraints(equivalences::Vector{EquivalenceSpecification}, variables::Dict{Int, Symbol})::Vector{PropagatorConstraint}
+function specs2constraints(equivalences::Vector{EquivalenceSpecification}, variables::Dict{Int, Symbol}; duplicate_forbidden::Bool=false)::Vector{PropagatorConstraint}
     specs = deepcopy(equivalences)
     constraints = PropagatorConstraint[]
 
     create_forbidden_constraints!(specs, constraints, variables)
     create_ordered_constraints!(specs, constraints, variables)
 
+    if duplicate_forbidden
+        duplicate_forbidden_constraints!(constraints, variables)
+    end
     generalize_ordered_constraints(constraints)
 
     return constraints
@@ -73,6 +76,38 @@ function create_ordered_constraints!(
     # Remove all specifications that have been converted to constraints.
     for i ∈ reverse!(deleted_specifications)
         deleteat!(specifications, i)
+    end
+end
+
+
+function duplicate_forbidden_constraints!(constraints::Vector{PropagatorConstraint}, variables::Dict{Int, Symbol})::Nothing
+    reverse_variables = Dict{Symbol, Int}(v => k for (k, v) ∈ variables) # Maps symbols to rulenode indices
+
+    matchnode2rulenode(mn::MatchNode) = RuleNode(mn.rule_ind, [matchnode2rulenode(c) for c ∈ mn.children])
+    matchnode2rulenode(mv::MatchVar) = RuleNode(reverse_variables[mv.var_name])
+
+    forbidden_constraints = filter(x -> x isa Forbidden, constraints)
+    ordered_constraints = filter(x -> x isa Ordered, constraints)
+    for o ∈ ordered_constraints
+        @assert length(o.order) == 2
+        for f ∈ forbidden_constraints
+            pattern_tree = matchnode2rulenode(f.tree) # Doesn't need a deepcopy
+            vars = Dict{Symbol, AbstractRuleNode}()
+            if HerbConstraints._pattern_match(pattern_tree, o.tree, vars) ≡ nothing
+                assignment1 = vars[o.order[1]]
+                assignment2 = vars[o.order[2]]
+                temp_ind = assignment1.ind
+                temp_children = assignment1.children
+                assignment1.ind = assignment2.ind
+                assignment1.children = assignment2.children
+                assignment2.ind = temp_ind
+                assignment2.children = temp_children
+
+                new_constraint = Forbidden(rulenode2matchnode(pattern_tree, variables))
+                push!(constraints, new_constraint)
+            end
+
+        end
     end
 end
 

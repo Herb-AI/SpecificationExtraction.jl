@@ -85,7 +85,7 @@ function constraint_discovery(
     end
 
     # Extract specifications
-    constraints = []
+    constraints = Vector{PropagatorConstraint}()
     for type ∈ types
         equivalence_classes = get_equivalences(
             g, 
@@ -109,23 +109,20 @@ function constraint_discovery(
             variables[v.index] = v.var
         end
 
+        specs = collect(Iterators.flatten(pruned_specs))
         if only_general_constraints
-            for specs ∈ pruned_specs
-                append!(constraints, specs2constraints(filter(x -> containsrule(x.lhs, [v.index for v ∈ input_variables]), specs), variables))
-                # TODO: Remove printing
-                for equivalence ∈ specs
-                    if containsrule(equivalence.lhs, [v.index for v ∈ input_variables])
-                        println("$(rulenode2expr(equivalence.lhs, g)) → $(rulenode2expr(equivalence.rhs, g))")
-                    end
+            append!(constraints, specs2constraints(filter(x -> containsrule(x.lhs, [v.index for v ∈ input_variables]), specs), variables, duplicate_forbidden=true))
+            # TODO: Remove printing
+            for equivalence ∈ specs
+                if containsrule(equivalence.lhs, [v.index for v ∈ input_variables])
+                    println("$(rulenode2expr(equivalence.lhs, g)) → $(rulenode2expr(equivalence.rhs, g))")
                 end
             end
         else
-            for specs ∈ pruned_specs
-                append!(constraints, specs2constraints(specs, variables))
-                # TODO: Remove printing
-                for equivalence ∈ specs
-                    println("$(rulenode2expr(equivalence.lhs, g)) → $(rulenode2expr(equivalence.rhs, g))")
-                end
+            append!(constraints, specs2constraints(Iterators.flatten(pruned_specs), variables, duplicate_forbidden=true))
+            # TODO: Remove printing
+            for equivalence ∈ specs
+                println("$(rulenode2expr(equivalence.lhs, g)) → $(rulenode2expr(equivalence.rhs, g))")
             end
         end
     end
