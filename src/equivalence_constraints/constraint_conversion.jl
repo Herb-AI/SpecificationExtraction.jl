@@ -96,15 +96,17 @@ function duplicate_forbidden_constraints!(constraints::Vector{PropagatorConstrai
             if HerbConstraints._pattern_match(pattern_tree, o.tree, vars) ≡ nothing
                 assignment1 = vars[o.order[1]]
                 assignment2 = vars[o.order[2]]
-                temp_ind = assignment1.ind
-                temp_children = assignment1.children
-                assignment1.ind = assignment2.ind
-                assignment1.children = assignment2.children
-                assignment2.ind = temp_ind
-                assignment2.children = temp_children
+                if assignment1 ≠ assignment2
+                    temp_ind = assignment1.ind
+                    temp_children = assignment1.children
+                    assignment1.ind = assignment2.ind
+                    assignment1.children = assignment2.children
+                    assignment2.ind = temp_ind
+                    assignment2.children = temp_children
 
-                new_constraint = Forbidden(rulenode2matchnode(pattern_tree, variables))
-                push!(constraints, new_constraint)
+                    new_constraint = Forbidden(rulenode2matchnode(pattern_tree, variables))
+                    push!(constraints, new_constraint)
+                end
             end
 
         end
