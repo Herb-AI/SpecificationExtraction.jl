@@ -38,20 +38,41 @@ function specification_generation(
         # Create tests
         tests = []
         for _ ∈ 1:batch_size
-            rule_test::SymbolTable = Dict{Symbol, Any}()
-            test::SymbolTable = Dict{Symbol, Any}()
-            type_counter = Dict{Symbol, Int}(t => 0 for t ∈ grammar.types)
-            for type ∈ grammar.childtypes[tested_rule_ind]
-                i = type_counter[type] += 1
-                
-                generated_value = data_generators[type]()
-                varname = Symbol("VarInput$type$i") 
-                test[varname] = generated_value
-                rule_test[varname] = generated_value
+            success = false
+            attempts = 0
+            error = nothing
+            while !success && attempts < 100
+
+                rule_test::SymbolTable = Dict{Symbol, Any}()
+                test::SymbolTable = Dict{Symbol, Any}()
+                type_counter = Dict{Symbol, Int}(t => 0 for t ∈ grammar.types)
+                for type ∈ grammar.childtypes[tested_rule_ind]
+                    i = type_counter[type] += 1
+                    
+                    generated_value = data_generators[type]()
+                    varname = Symbol("VarInput$type$i") 
+                    test[varname] = generated_value
+                    rule_test[varname] = generated_value
+                end
+                attempts += 1
+                try
+                    output_value = test_with_input(g_symboltable, tested_rule_expr, rule_test)
+                    test[Symbol("VarOutput$(grammar.types[tested_rule_ind])")] = output_value
+                    push!(tests, test)
+                    success = true
+                catch e 
+                    error = e
+                end
             end
-            output_value = test_with_input(g_symboltable, tested_rule_expr, rule_test)
-            test[Symbol("VarOutput$(grammar.types[tested_rule_ind])")] = output_value
-            push!(tests, test)
+            if !success
+                @warn "Couldn't find a working example in 100 attempts:"
+                Base.showerror(stdout, error)
+            end
+        end
+
+        @show length(tests)
+        if length(tests) == 0
+            return nothing
         end
 
         # Filter any relation that doesn't return true for all tests
