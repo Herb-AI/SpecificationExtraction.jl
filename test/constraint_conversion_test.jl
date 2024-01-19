@@ -1,5 +1,5 @@
-@testset "constraint conversion" verbose=true begin
-    g = Herb.HerbGrammar.@csgrammar begin
+@testset "Constraint conversion" verbose=true begin
+    g = @csgrammar begin
         Real = a # 1
         Real = b # 2
         Real = |(0:9) # 3 - 12

@@ -1,9 +1,10 @@
 module SpecificationExtraction
 
-using ..HerbGrammar
-using ..HerbSearch
-using ..HerbEvaluation
-using ..HerbConstraints
+using HerbCore
+using HerbGrammar
+using HerbSearch
+using HerbInterpret
+using HerbConstraints
 
 using Base.Iterators
 using ProgressBars
@@ -31,6 +32,7 @@ export
     SpecificationOperator,
     SpecificationLiteral,
 
+    specification_discovery,
     get_equivalences,
     exhaustive_auto_generator,
     constraint_discovery,

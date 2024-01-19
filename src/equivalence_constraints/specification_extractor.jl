@@ -38,7 +38,8 @@ function get_equivalences(
     # Only allow programs that when using a variable also use all variables of the same type 
     # that are defined above it in the grammar.
     # Prevents certain duplicates by variable renaming.
-    Iterators.filter!(x -> _check_variable_usage(x.expr, type_by_variable, variables_by_type), programs)
+    # programs = Iterators.filter(x -> _check_variable_usage(x.expr, type_by_variable, variables_by_type), programs)
+    filter!(x -> _check_variable_usage(x.expr, type_by_variable, variables_by_type), programs)
 
     final_equivalence_classes = []
     equivalence_classesᵢ = [programs]
