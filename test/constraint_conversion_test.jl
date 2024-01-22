@@ -1,3 +1,6 @@
+using HerbGrammar
+using HerbConstraints
+
 @testset "Constraint conversion" verbose=true begin
     g = @csgrammar begin
         Real = a # 1
